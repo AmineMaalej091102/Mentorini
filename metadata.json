@@ -1,0 +1,6 @@
+{
+  "name": "Mentorini",
+  "description": "Mobile-first peer-mentorship PWA for the Tunisian IT ecosystem in authentic Arabizi with video-unlocked WhatsApp connections.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
