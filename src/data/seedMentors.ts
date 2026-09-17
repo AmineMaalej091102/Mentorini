@@ -35,7 +35,7 @@ export const INITIAL_MENTORS: Mentor[] = [
     category: 'web_mobile',
     tags: ['React', 'CSS', 'Portfolio', 'Reconversion'],
     isFlagship: false,
-    feynmanTopic: 'Flexbox vs CSS Grid bel Arabizi fi 3 d9aye9',
+    feynmanTopic: 'Flexbox vs CSS Grid bel Tounsi fi 3 d9aye9',
     createdAt: '2025-01-02T00:00:00.000Z',
   },
   {

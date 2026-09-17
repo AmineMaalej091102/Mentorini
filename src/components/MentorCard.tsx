@@ -133,10 +133,10 @@ export function MentorCard({ mentor, isUnlocked, onUnlock }: MentorCardProps) {
                   <Play className="w-6 h-6 fill-white ml-0.5" />
                 </div>
                 <p className="text-xs font-bold text-white mb-0.5">
-                  Tfarrej f l-concept bel Arabizi
+                  Tfarrej f l-concept bel Tounsi
                 </p>
                 <p className="text-[11px] text-zinc-400">
-                  Click bech t-unlooki l-WhatsApp mte3 {mentor.name.split(' ')[0]}
+                  Click bech t-unlocki l-WhatsApp mte3 {mentor.name.split(' ')[0]}
                 </p>
               </div>
             )}
@@ -163,7 +163,7 @@ export function MentorCard({ mentor, isUnlocked, onUnlock }: MentorCardProps) {
                 onClick={handleManualUnlock}
                 className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
               >
-                Choftou 3al PC? Unlooki
+                Choftou 3al PC? Unlocki
               </button>
             )}
           </div>
@@ -219,7 +219,7 @@ export function MentorCard({ mentor, isUnlocked, onUnlock }: MentorCardProps) {
             className="w-full flex items-center justify-center gap-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 font-bold text-sm py-3 px-4 rounded-xl cursor-not-allowed border border-zinc-200 dark:border-zinc-700/50"
           >
             <Lock className="w-4 h-4 text-zinc-400" />
-            <span>Connecti m3ah (Tfarrej f l-video bech t-unlooki)</span>
+            <span>Connecti m3ah (Tfarrej f l-video bech t-unlocki)</span>
           </button>
         )}
 

@@ -122,7 +122,7 @@ export function MentorRegisterModal({ isOpen, onClose, onAddMentor }: MentorRegi
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
               <p className="font-extrabold text-amber-900 dark:text-amber-200 leading-snug">
-                ⚠️ Lazim t7ot video short wala long-form tfa7em fih concept b Feynman Technique bel Arabizi mte3na.
+                ⚠️ Lazim t7ot video short wala long-form tfa7em fih concept b Feynman Technique bel Tounsi mte3na.
               </p>
               <p className="text-amber-800 dark:text-amber-300/90 mt-1 text-[11px] leading-relaxed">
                 Mentees ychoufou l-video mte3ek 9bal ma yconnectiw m3ak. Tafsir simplifié ybayan elli enti ma3lem f l-mawdhou3!

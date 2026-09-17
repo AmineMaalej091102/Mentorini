@@ -18,7 +18,7 @@ export function Manifesto({ onOpenRegister, onScrollToFeed }: ManifestoProps) {
 
         {/* Big Bold Arabizi Manifesto Headline */}
         <h1 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 leading-[1.25] mb-3">
-          Raba7 a3az zouz 7weyej 3andek: <br />
+          Erba7 a3az zouz 7weyej 3andek: <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
             Wa9tek w l&apos;Energie mte3ek.
           </span>
@@ -33,12 +33,12 @@ export function Manifesto({ onOpenRegister, onScrollToFeed }: ManifestoProps) {
         <div className="space-y-2 mb-5">
           <div className="flex items-start gap-2 text-xs text-zinc-800 dark:text-zinc-200 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-            <span><strong className="text-zinc-900 dark:text-white font-bold">Feynman Technique:</strong> Kol mentor yfassar concept fi video 9sira bel Arabizi mte3na.</span>
+            <span><strong className="text-zinc-900 dark:text-white font-bold">Feynman Technique:</strong> Kol mentor yfassar concept fi video 9sira bel Tounsi mte3na.</span>
           </div>
 
           <div className="flex items-start gap-2 text-xs text-zinc-800 dark:text-zinc-200 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-            <span><strong className="text-zinc-900 dark:text-white font-bold">Video-Watch Lock:</strong> Tfarrej f l-video bech t-unlooki l-WhatsApp mte3ou direct blech talyiz.</span>
+            <span><strong className="text-zinc-900 dark:text-white font-bold">Video-Watch Lock:</strong> Tfarrej f l-video bech t-unlocki l-WhatsApp mte3ou direct blech takssir rass.</span>
           </div>
 
           <div className="flex items-start gap-2 text-xs text-zinc-800 dark:text-zinc-200 font-medium">
