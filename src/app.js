@@ -23,7 +23,7 @@ function getEnvVariable(key) {
 export const SUPABASE_URL = 
   getEnvVariable('VITE_SUPABASE_URL') || 
   getEnvVariable('SUPABASE_URL') || 
-  'https://your-project.supabase.co';
+  'https://quweyaxneqyyjfhhccbd.supabase.co';
 
 export const SUPABASE_ANON_KEY = 
   getEnvVariable('VITE_SUPABASE_ANON_KEY') || 
