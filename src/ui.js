@@ -27,6 +27,40 @@ import {
  * directly into the centralized AppStore and Supabase methods.
  */
 if (typeof window !== 'undefined') {
+  // Theme Manager handling system, dark, and light modes
+  window.ThemeManager = {
+    setTheme: (mode) => {
+      localStorage.setItem('mentorini_theme_mode_v1', mode);
+      const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      const selector = document.getElementById('theme-selector');
+      if (selector && selector.value !== mode) {
+        selector.value = mode;
+      }
+    },
+    init: () => {
+      const saved = localStorage.getItem('mentorini_theme_mode_v1') || 'system';
+      window.ThemeManager.setTheme(saved);
+      if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+          const current = localStorage.getItem('mentorini_theme_mode_v1') || 'system';
+          if (current === 'system') {
+            window.ThemeManager.setTheme('system');
+          }
+        });
+      }
+    }
+  };
+
+  // Tab switcher directly bound to AppStore
+  window.switchTab = (tabName) => {
+    AppStore.setTab(tabName);
+  };
+
   window.MentoriniActions = {
     // Navigation / Tab router
     setTab: (tabName) => {
@@ -896,8 +930,247 @@ export function renderProfileView(state = {}) {
 }
 
 // ============================================================================
-// 7. MAIN SHELL & SCREEN WRAPPER (MOBILE VIEWPORT: MAX-WIDTH 480PX)
+// 7. DASHBOARD & IDEA VIEWS (TUNISIAN ARABIZI MANIFESTO & USER SPACE)
 // ============================================================================
+
+/**
+ * Dashboard / Espace Compte View
+ */
+export function renderDashboardView(state = {}) {
+  const user = state.userSession || state.activeUser;
+  const watchedCount = state.watchedVideos instanceof Set 
+    ? state.watchedVideos.size 
+    : (Array.isArray(state.watchedVideos) ? state.watchedVideos.length : 0);
+  const mentorsCount = (state.mentors || []).length;
+
+  if (!user) {
+    return `
+      <section class="space-y-4 animate-fadeIn">
+        <div class="bg-gradient-to-b from-indigo-50/80 to-white dark:from-indigo-950/30 dark:to-zinc-900 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl p-5 text-center shadow-sm">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-black text-xl mb-3 shadow-inner">
+            👤
+          </div>
+          <h2 class="text-base font-black text-zinc-900 dark:text-white">
+            Espace Compte Mentorini
+          </h2>
+          <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-[260px] mx-auto">
+            Connecti fil compte mte3ek bech tchouf l-historique w les mentors elli 7kit m3ahom.
+          </p>
+          <div class="mt-4 flex flex-col gap-2">
+            <button 
+              type="button" 
+              onclick="MentoriniActions.setTab('signin')" 
+              class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition-all cursor-pointer"
+            >
+              Sign In (Dkhol b noumrouk) →
+            </button>
+            <button 
+              type="button" 
+              onclick="MentoriniActions.setTab('signup')" 
+              class="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-bold text-xs transition-all cursor-pointer"
+            >
+              Mazelt ma 3andekch compte? Sajjel houni
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Stats Grid -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+            <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400">${mentorsCount}</span>
+            <p class="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">Peer Mentors Active</p>
+            <p class="text-[10px] text-zinc-400 mt-0.5">Fil IT w Bac Info</p>
+          </div>
+          <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+            <span class="text-2xl font-black text-emerald-500">${watchedCount}</span>
+            <p class="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">Videos Unlocked</p>
+            <p class="text-[10px] text-zinc-400 mt-0.5">Concepts mtfarrej fehom</p>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="space-y-4 animate-fadeIn">
+      <!-- Profile Welcome Card -->
+      <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white flex items-center justify-center font-black text-lg shadow-md">
+              ${user.name ? user.name.charAt(0) : 'U'}
+            </div>
+            <div>
+              <h2 class="text-base font-black text-zinc-900 dark:text-white">
+                ${user.name}
+              </h2>
+              <p class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                ${user.role === 'mentor' ? '🛠️ Peer Mentor IT' : '🎓 Mentee (Etudiant)'}
+              </p>
+              <p class="text-[11px] text-zinc-400 mt-0.5">
+                📞 ${user.phone || 'Non renseigné'}
+              </p>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onclick="MentoriniActions.logout()" 
+            class="px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
+          >
+            Déconnexion
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+          <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400">${watchedCount}</span>
+          <p class="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">Concepts Mtfarrej Fehom</p>
+          <p class="text-[10px] text-zinc-400 mt-0.5">Video-Watch Unlocked</p>
+        </div>
+        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+          <span class="text-2xl font-black text-emerald-500">$0</span>
+          <p class="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">Frais Déboursés</p>
+          <p class="text-[10px] text-zinc-400 mt-0.5">100% Peer-to-Peer gratuit</p>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm space-y-2">
+        <h3 class="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+          Actions Rapides
+        </h3>
+        <button 
+          type="button" 
+          onclick="MentoriniActions.setTab('feed')" 
+          class="w-full py-2.5 px-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-bold flex items-center justify-between transition-all cursor-pointer"
+        >
+          <span>🔍 Chouf les mentors fil Feed</span>
+          <span>→</span>
+        </button>
+        <button 
+          type="button" 
+          onclick="MentoriniActions.setTab('signup')" 
+          class="w-full py-2.5 px-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center justify-between transition-all cursor-pointer"
+        >
+          <span>🛠️ Sajjel rou7ek mentor jdid</span>
+          <span>+</span>
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * Idea / Value Manifesto View
+ */
+export function renderIdeaView(state = {}) {
+  return `
+    <section class="space-y-4 animate-fadeIn">
+      <!-- Big Manifesto Header -->
+      <div class="bg-gradient-to-br from-indigo-900 via-indigo-950 to-zinc-950 text-white p-5 rounded-2xl shadow-lg border border-indigo-800/60 space-y-3">
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-800/60 border border-indigo-700 text-indigo-200 text-[10px] font-mono font-bold">
+          💡 El Fekra mta3 Mentorini
+        </div>
+        <h1 class="text-base font-black leading-snug">
+          Erba7 a3az zouz 7weyej 3andek:<br/>
+          <span class="text-indigo-400">Wa9tek w l'Energie mte3ek.</span>
+        </h1>
+        <p class="text-xs text-zinc-300 leading-relaxed">
+          Fi 3oudh ma tdhi3 fi b7ar YouTube mta3 50 sa3a w forums 9dom, Mentorini ygroupilik peer mentors mfiltrin b clique wa7da.
+        </p>
+      </div>
+
+      <!-- 3 Strategic Pillars -->
+      <div class="space-y-3 text-xs">
+        
+        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-base">🧠</span>
+            <h3 class="font-black text-zinc-900 dark:text-white">1. Feynman Technique bel Tounsi</h3>
+          </div>
+          <p class="text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            A7san tari9a bech tet3alem concept s3ib (Algo, Recursion, Pointers, OOP) hiya ki yfasserhoulek chkoun 9riblek fel 3mor w bel lahja mte3na.
+          </p>
+        </div>
+
+        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-base">🔒</span>
+            <h3 class="font-black text-zinc-900 dark:text-white">2. Video-Watch Lock Protocol</h3>
+          </div>
+          <p class="text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            L-WhatsApp mte3 l-mentor ma yet-unlooka ken ba3d ma l-mentee yetfarrej fil video. Bech n7amiw wa9t l-mentor w nwadhi7ou elli l-mentee serieux.
+          </p>
+        </div>
+
+        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-base">⚡</span>
+            <h3 class="font-black text-zinc-900 dark:text-white">3. Zero-Cost Infrastructure ($0)</h3>
+          </div>
+          <p class="text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            Ma famech abonnements w ma famech des frais. Direct deep-link 3la WhatsApp w YouTube, kolchay open w gratuit lil kol.
+          </p>
+        </div>
+
+      </div>
+
+      <div class="pt-2 text-center">
+        <button 
+          type="button" 
+          onclick="MentoriniActions.setTab('feed')" 
+          class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition-all cursor-pointer"
+        >
+          Dkhol lil Feed w Lawwej 3la Mentor 🚀
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+// ============================================================================
+// 8. MAIN SHELL & SCREEN WRAPPER (MOBILE VIEWPORT: MAX-WIDTH 480PX)
+// ============================================================================
+
+/**
+ * Renders the active view for injection directly into #app-viewport
+ */
+export function renderActiveView(state = {}) {
+  const currentTab = state.tabRouter || 'feed';
+  if (currentTab === 'signup') {
+    return renderSignUpView(state);
+  } else if (currentTab === 'signin') {
+    return renderSignInView(state);
+  } else if (currentTab === 'profile') {
+    return renderProfileView(state);
+  } else if (currentTab === 'dashboard') {
+    return renderDashboardView(state);
+  } else if (currentTab === 'idea') {
+    return renderIdeaView(state);
+  } else {
+    return renderUniversalFeed(state);
+  }
+}
+
+/**
+ * Updates sticky navigation tab styling in App.tsx
+ */
+export function updateNavButtons(currentTab) {
+  if (typeof document === 'undefined') return;
+
+  const feedBtn = document.getElementById('nav-feed');
+  const dashBtn = document.getElementById('nav-dashboard');
+  const ideaBtn = document.getElementById('nav-idea');
+
+  const activeClass = 'text-indigoNeon text-xs font-mono font-bold cursor-pointer';
+  const inactiveClass = 'text-gray-400 dark:text-gray-500 text-xs font-mono cursor-pointer';
+
+  if (feedBtn) feedBtn.className = (currentTab === 'feed' || currentTab === 'profile') ? activeClass : inactiveClass;
+  if (dashBtn) dashBtn.className = (currentTab === 'dashboard' || currentTab === 'signup' || currentTab === 'signin') ? activeClass : inactiveClass;
+  if (ideaBtn) ideaBtn.className = (currentTab === 'idea') ? activeClass : inactiveClass;
+}
 
 /**
  * Assembles the full application shell locked to mobile phone dimensions
@@ -906,17 +1179,7 @@ export function renderProfileView(state = {}) {
 export function renderAppLayout(state = {}) {
   const currentTab = state.tabRouter || 'feed';
   const userSession = state.userSession || state.activeUser;
-
-  let activeViewHtml = '';
-  if (currentTab === 'signup') {
-    activeViewHtml = renderSignUpView(state);
-  } else if (currentTab === 'signin') {
-    activeViewHtml = renderSignInView(state);
-  } else if (currentTab === 'profile') {
-    activeViewHtml = renderProfileView(state);
-  } else {
-    activeViewHtml = renderUniversalFeed(state);
-  }
+  const activeViewHtml = renderActiveView(state);
 
   return `
     <div class="w-full max-w-[480px] mx-auto min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col border-x border-zinc-200 dark:border-zinc-800 shadow-2xl transition-colors">
@@ -1012,20 +1275,46 @@ export function renderAppLayout(state = {}) {
  * @param {HTMLElement|string} targetElement - Mount DOM node or selector
  * @param {Object} store - Central AppStore instance
  */
-export function mountApp(targetElement, store = AppStore) {
-  const container = typeof targetElement === 'string' 
-    ? document.querySelector(targetElement) 
-    : targetElement;
+export function mountApp(targetElement = '#app-viewport', store = AppStore) {
+  const getContainer = () => {
+    if (typeof targetElement === 'string') {
+      return document.querySelector(targetElement) || document.querySelector('#app-viewport');
+    }
+    return targetElement;
+  };
 
-  if (!container) {
-    console.error('[MentoriniUI] Target mount container not found:', targetElement);
-    return;
-  }
+  const container = getContainer();
 
   const render = () => {
+    const currentContainer = getContainer();
+    if (!currentContainer) {
+      return;
+    }
     const state = store.getState();
-    container.innerHTML = renderAppLayout(state);
+    if (currentContainer.id === 'app-viewport') {
+      currentContainer.innerHTML = renderActiveView(state);
+    } else {
+      currentContainer.innerHTML = renderAppLayout(state);
+    }
+    updateNavButtons(state.tabRouter || 'feed');
   };
+
+  // If container is not yet ready, retry shortly
+  if (!container) {
+    const timer = setTimeout(() => {
+      render();
+    }, 50);
+    const unsubscribe = store.subscribe(() => {
+      render();
+    });
+    return {
+      unmount: () => {
+        clearTimeout(timer);
+        unsubscribe();
+      },
+      render,
+    };
+  }
 
   // Initial render
   render();
@@ -1038,7 +1327,8 @@ export function mountApp(targetElement, store = AppStore) {
   return {
     unmount: () => {
       unsubscribe();
-      container.innerHTML = '';
+      const currentContainer = getContainer();
+      if (currentContainer) currentContainer.innerHTML = '';
     },
     render,
   };
@@ -1049,9 +1339,13 @@ export default {
   renderSignInView,
   renderUniversalFeed,
   renderProfileView,
+  renderDashboardView,
+  renderIdeaView,
+  renderActiveView,
   renderFeedSummaryCard,
   renderContactButton,
   renderAppLayout,
   mountApp,
   formatBioWithPills,
 };
+
