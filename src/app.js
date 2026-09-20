@@ -1,30 +1,4 @@
-/**
- * Mentorini - Peer-Mentorship for the Tunisian IT Ecosystem
- * Core State Engine & Supabase Authentication Architecture (app.js)
- *
- * Requirements Implemented:
- * 1. Google OAuth Core Trigger:
- *    Global async function loginWithGoogle() running:
- *    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
- *
- * 2. Post-Login Profile Session Synchronizer:
- *    Async bootstrapper checkUserSession() checking await supabase.auth.getUser().
- *    Captures user.user_metadata.full_name, user.id, email.
- *    Queries the public unified Supabase 'users' table. If row doesn't exist yet,
- *    automatically inserts them as a default peer record with empty 'bio' and 'video_url'
- *    columns for absolute platform equality on Day 1. Caches active session locally.
- *
- * 3. The Creator Update Action:
- *    Async function updateProfileContent(bio, videoUrl) executing a public patch query:
- *    await supabase.from("users").update({ bio, video_url: videoUrl }).eq("id", user.id);
- *    Refreshes the feed dynamically via fetchMentors().
- */
-
 import { createClient } from '@supabase/supabase-js';
-
-// ============================================================================
-// 1. CONFIGURATION & SUPABASE CLIENT INITIALIZATION
-// ============================================================================
 
 function getEnvVariable(key) {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
@@ -36,18 +10,25 @@ function getEnvVariable(key) {
   if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__[key]) {
     return window.__ENV__[key];
   }
+  if (typeof window !== 'undefined' && window[key]) {
+    return window[key];
+  }
+  if (typeof localStorage !== 'undefined') {
+    const saved = localStorage.getItem(key);
+    if (saved) return saved;
+  }
   return '';
 }
 
 export const SUPABASE_URL = 
   getEnvVariable('VITE_SUPABASE_URL') || 
   getEnvVariable('SUPABASE_URL') || 
-  'https://xyzcompany.supabase.co';
+  'https://your-project.supabase.co';
 
 export const SUPABASE_ANON_KEY = 
   getEnvVariable('VITE_SUPABASE_ANON_KEY') || 
   getEnvVariable('SUPABASE_ANON_KEY') || 
-  'public-anon-key-placeholder';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -62,12 +43,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
-// Explicitly expose supabase on window for external access & system specifications
 if (typeof window !== 'undefined') {
   window.supabase = supabase;
 }
 
-// Local cache keys
 const STORAGE_KEYS = {
   USER_SESSION: 'mentorini_user_session_v3',
   WATCHED_VIDEOS: 'mentorini_unlocked_videos_v3',
@@ -75,13 +54,6 @@ const STORAGE_KEYS = {
   ACTIVE_PROFILE_ID: 'mentorini_active_profile_id_v3',
 };
 
-// ============================================================================
-// 2. DATA UTILITIES (PHONE FORMATTING & YOUTUBE ID PARSING)
-// ============================================================================
-
-/**
- * Cleans and formats Tunisian phone numbers to standard international format (+216).
- */
 export function cleanPhoneNumber(phone) {
   let cleaned = String(phone || '').replace(/[^0-9]/g, '');
   if (cleaned.length === 8) {
@@ -92,9 +64,6 @@ export function cleanPhoneNumber(phone) {
   return cleaned;
 }
 
-/**
- * Extracts 11-character YouTube video ID from standard URLs, mobile shares, embeds, or Shorts.
- */
 export function extractYouTubeId(url) {
   if (!url) return null;
   const trimmed = String(url).trim();
@@ -105,16 +74,12 @@ export function extractYouTubeId(url) {
     /^([\w-]{11})$/
   ];
 
-  for (const pattern of patterns) {
-    const match = trimmed.match(pattern);
+  for (let i = 0; i < patterns.length; i++) {
+    const match = trimmed.match(patterns[i]);
     if (match && match[1]) return match[1];
   }
   return null;
 }
-
-// ============================================================================
-// 3. CURATED SEED MENTORS (DAY 1 COLD-START RESILIENCE)
-// ============================================================================
 
 export const SEED_MENTORS = [
   {
@@ -166,10 +131,6 @@ export const SEED_MENTORS = [
   },
 ];
 
-// ============================================================================
-// 4. CENTRAL APP STORE (REACTIVE CLIENT STATE)
-// ============================================================================
-
 class CentralAppStore {
   constructor() {
     this._listeners = new Set();
@@ -203,7 +164,7 @@ class CentralAppStore {
     try {
       const item = localStorage.getItem(key);
       return item ? JSON.parse(item) : fallback;
-    } catch {
+    } catch (e) {
       return fallback;
     }
   }
@@ -213,7 +174,7 @@ class CentralAppStore {
     try {
       localStorage.setItem(key, JSON.stringify(val));
     } catch (err) {
-      console.warn(`[AppStore] Failed to cache "${key}":`, err);
+      console.warn(err);
     }
   }
 
@@ -286,7 +247,7 @@ class CentralAppStore {
       try {
         listener(currentState, prevState);
       } catch (err) {
-        console.error('[AppStore] Listener notification error:', err);
+        console.error(err);
       }
     });
   }
@@ -331,71 +292,30 @@ class CentralAppStore {
 
 export const AppStore = new CentralAppStore();
 
-// ============================================================================
-// 5. REQUIREMENT 1: GOOGLE OAUTH CORE TRIGGER
-// ============================================================================
-
-/**
- * Initiates native Google OAuth via Supabase:
- * await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
- *
- * @returns {Promise<Object>}
- */
 export async function loginWithGoogle() {
   AppStore.setState({ isLoading: true, error: null });
-
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin // 🟢 This forces it to loop back to your Vercel link!
+        redirectTo: window.location.origin
       }
     });
-
     if (error) throw error;
     return { success: true, data };
   } catch (err) {
-    console.warn('[Mentorini Auth] signInWithOAuth execution notice:', err);
-    AppStore.setState({ isLoading: false });
-
-    // In AI Studio iframe preview or when Google OAuth credentials are being configured:
-    // Seamlessly complete instant authentication with standard Google account data
-    const testEmail = 'yassine.bensalem@gmail.com';
-    const testName = 'Yassine Ben Salem';
-    const mockAuthUser = {
-      id: `google-user-${Date.now()}`,
-      email: testEmail,
-      user_metadata: {
-        full_name: testName,
-      },
-    };
-
-    const sessionUser = await syncGoogleUserToDb(mockAuthUser);
-    return {
-      success: true,
-      user: sessionUser,
-      notice: 'Tconnectit b compte Google (Aktivé fil preview)!'
-    };
+    AppStore.setState({ isLoading: false, error: err.message || String(err) });
+    throw err;
   }
 }
 
-// Global exposure
 if (typeof window !== 'undefined') {
   window.loginWithGoogle = loginWithGoogle;
 }
 
-// Backward-compatible alias for existing callers
 export const signInWithGoogle = loginWithGoogle;
 
-// ============================================================================
-// 6. REQUIREMENT 2: POST-LOGIN PROFILE SESSION SYNCHRONIZER
-// ============================================================================
-
-/**
- * Internal helper to query and commit user into the unified Supabase 'users' table
- * with empty 'bio' and 'video_url' columns for Day 1 platform equality.
- */
-async function syncGoogleUserToDb(user) {
+export async function syncGoogleUserToDb(user) {
   if (!user) return null;
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
@@ -409,7 +329,6 @@ async function syncGoogleUserToDb(user) {
   let syncedRecord = null;
 
   try {
-    // Query public unified Supabase 'users' table for matching ID/email
     let query = client.from('users').select('*');
     if (id && email) {
       query = query.or(`id.eq.${id},email.eq.${email}`);
@@ -436,13 +355,10 @@ async function syncGoogleUserToDb(user) {
         createdAt: existingUser.created_at || new Date().toISOString(),
       };
 
-      // Keep record in sync if name or email were updated
       if (!existingUser.email && email) {
         await client.from('users').update({ email, name: fullName }).eq('id', existingUser.id);
       }
     } else {
-      // Row doesn't exist yet: automatically insert them into 'users' table
-      // as a default peer record with empty 'bio' and 'video_url' columns
       const defaultPeerRecord = {
         id: id,
         name: fullName,
@@ -450,7 +366,7 @@ async function syncGoogleUserToDb(user) {
         bio: '',
         video_url: '',
         status: 'Active Member',
-        role: 'mentee', // Egalitarian Day 1 peer status
+        role: 'mentee',
       };
 
       const { data: inserted, error: insertErr } = await client
@@ -460,7 +376,6 @@ async function syncGoogleUserToDb(user) {
         .maybeSingle();
 
       if (insertErr) {
-        console.warn('[Mentorini Sync] Direct ID insert notice, retrying generated insert:', insertErr);
         const { data: fallbackInserted } = await client
           .from('users')
           .insert([{
@@ -480,7 +395,6 @@ async function syncGoogleUserToDb(user) {
       }
     }
   } catch (err) {
-    console.warn('[Mentorini Sync] Database sync notice, establishing local cache:', err);
     syncedRecord = {
       id: id || `user-${Date.now()}`,
       name: fullName,
@@ -494,7 +408,6 @@ async function syncGoogleUserToDb(user) {
     };
   }
 
-  // Cache active session locally
   AppStore.setState({
     userSession: syncedRecord,
     activeUser: syncedRecord,
@@ -505,23 +418,12 @@ async function syncGoogleUserToDb(user) {
   return syncedRecord;
 }
 
-/**
- * Async bootstrapper checkUserSession()
- * - Checks await supabase.auth.getUser()
- * - If verified Google user session exists, captures metadata (user.user_metadata.full_name, user.id or email)
- * - Queries public unified Supabase 'users' table. If row doesn't exist yet, automatically inserts them
- *   as default peer record with empty 'bio' and 'video_url' columns for Day 1 equality.
- * - Caches active session locally.
- *
- * @returns {Promise<Object|null>} The verified user profile or null
- */
 export async function checkUserSession() {
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
   try {
     const { data, error } = await client.auth.getUser();
     if (error || !data || !data.user) {
-      // Check if local cache has existing session
       const cached = AppStore.getState().userSession;
       return cached || null;
     }
@@ -530,33 +432,16 @@ export async function checkUserSession() {
     const syncedProfile = await syncGoogleUserToDb(verifiedUser);
     return syncedProfile;
   } catch (err) {
-    console.warn('[Mentorini Session] checkUserSession notice:', err);
     return AppStore.getState().userSession || null;
   }
 }
 
-// Global exposure
 if (typeof window !== 'undefined') {
   window.checkUserSession = checkUserSession;
 }
 
-// Backward-compatible alias
 export const syncAuthenticatedUser = syncGoogleUserToDb;
 
-// ============================================================================
-// 7. REQUIREMENT 3: THE CREATOR UPDATE ACTION
-// ============================================================================
-
-/**
- * Async function updateProfileContent(bio, videoUrl)
- * Executes public patch query:
- * await supabase.from("users").update({ bio, video_url: videoUrl }).eq("id", user.id);
- * then refreshes the feed dynamically via fetchMentors().
- *
- * @param {string} bio - Description and Drive/GitHub resource links
- * @param {string} videoUrl - 16:9 aspect ratio YouTube video embed link
- * @returns {Promise<{success: boolean, user?: Object, error?: string}>}
- */
 export async function updateProfileContent(bio, videoUrl) {
   const state = AppStore.getState();
   const user = state.userSession || state.activeUser;
@@ -577,30 +462,27 @@ export async function updateProfileContent(bio, videoUrl) {
   AppStore.setState({ isLoading: true, error: null });
 
   try {
-    // Executes exact required patch query:
-    // await supabase.from("users").update({ bio, video_url: videoUrl }).eq("id", user.id);
     const { data, error } = await client
-      .from("users")
+      .from('users')
       .update({
         bio: trimmedBio,
         video_url: trimmedVideoUrl,
-        role: 'mentor', // Elevated from viewer to creator!
+        role: 'mentor',
         status: 'Peer Mentor IT',
       })
-      .eq("id", user.id);
+      .eq('id', user.id);
 
     if (error) {
-      // Fallback query matching by email if ID is a custom auth UID
       if (user.email) {
         await client
-          .from("users")
+          .from('users')
           .update({
             bio: trimmedBio,
             video_url: trimmedVideoUrl,
             role: 'mentor',
             status: 'Peer Mentor IT',
           })
-          .eq("email", user.email);
+          .eq('email', user.email);
       }
     }
 
@@ -612,7 +494,6 @@ export async function updateProfileContent(bio, videoUrl) {
       status: 'Peer Mentor IT',
     };
 
-    // Cache updated session locally
     AppStore.setState({
       userSession: updatedUser,
       activeUser: updatedUser,
@@ -620,12 +501,10 @@ export async function updateProfileContent(bio, videoUrl) {
       isShareModalOpen: false,
     });
 
-    // Refreshes the feed dynamically
     await fetchMentors();
 
     return { success: true, user: updatedUser };
   } catch (err) {
-    console.warn('[Mentorini Creator Action] Notice during remote update, caching locally:', err);
     const updatedUser = {
       ...user,
       bio: trimmedBio,
@@ -646,14 +525,10 @@ export async function updateProfileContent(bio, videoUrl) {
   }
 }
 
-// Global exposure
 if (typeof window !== 'undefined') {
   window.updateProfileContent = updateProfileContent;
 }
 
-/**
- * Backward compatible wrapper for UI form submission
- */
 export async function updateUserKnowledge({ bio, videoUrl, phone }) {
   const user = AppStore.getState().userSession;
   if (user && phone) {
@@ -663,24 +538,13 @@ export async function updateUserKnowledge({ bio, videoUrl, phone }) {
   return updateProfileContent(bio, videoUrl);
 }
 
-// ============================================================================
-// 8. DATABASE SYNC & FEED REFRESH (fetchMentors & Realtime)
-// ============================================================================
-
 let realtimeChannel = null;
 
-/**
- * Downloads mentor cards from the unified 'users' table.
- * Users who have role === 'mentor' or have contributed a video / bio are featured.
- *
- * @returns {Promise<Array>} List of mentors
- */
 export async function fetchMentors() {
   AppStore.setState({ isLoading: true, error: null });
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
   try {
-    // 1. Query unified 'users' table
     const { data: usersData, error: usersError } = await client
       .from('users')
       .select('*')
@@ -708,7 +572,6 @@ export async function fetchMentors() {
         }));
     }
 
-    // 2. Fallback check on legacy 'mentors' table if users table has no creators yet
     if (fetchedMentors.length === 0) {
       const { data: legacyMentors, error: legacyError } = await client
         .from('mentors')
@@ -734,7 +597,6 @@ export async function fetchMentors() {
       }
     }
 
-    // 3. Fallback to SEED_MENTORS if remote database is completely empty
     if (fetchedMentors.length === 0) {
       fetchedMentors = SEED_MENTORS;
     }
@@ -748,7 +610,6 @@ export async function fetchMentors() {
     subscribeToMentorsRealtime();
     return fetchedMentors;
   } catch (err) {
-    console.warn('[Mentorini Backend] fetchMentors notice, using seed cache:', err);
     AppStore.setState({
       mentors: SEED_MENTORS,
       isLoading: false,
@@ -758,9 +619,6 @@ export async function fetchMentors() {
   }
 }
 
-/**
- * Listens for real-time changes on both 'users' and 'mentors' tables.
- */
 export function subscribeToMentorsRealtime() {
   if (realtimeChannel) return realtimeChannel;
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
@@ -786,13 +644,9 @@ export function subscribeToMentorsRealtime() {
   return realtimeChannel;
 }
 
-// ============================================================================
-// 9. WHATSAPP DEEP-LINK REDIRECT ROUTER
-// ============================================================================
-
 export function executeWhatsAppRedirect(phone, text) {
   if (!phone) {
-    console.error('[WhatsApp Redirect] Target phone number is missing.');
+    console.error('Target phone number is missing.');
     return '';
   }
 
@@ -812,41 +666,30 @@ export function executeWhatsAppRedirect(phone, text) {
         window.open(waUrl, '_blank', 'noopener,noreferrer');
       }
     } catch (err) {
-      console.warn('[WhatsApp Redirect] Navigation notice:', err);
+      console.warn(err);
     }
   }
 
   return waUrl;
 }
 
-/**
- * Signs out current user
- */
 export async function signOutUser() {
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
   try {
     await client.auth.signOut();
   } catch (err) {
-    console.warn('[Mentorini Auth] signOut notice:', err);
+    console.warn(err);
   }
   AppStore.clearUserSession();
 }
 
-// ============================================================================
-// 10. BOOTSTRAP INITIALIZATION
-// ============================================================================
-
 export async function initializeMentoriniApp() {
-  console.log('🚀 [Mentorini] Initializing state engine, checking session & connecting to Supabase...');
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
-  // 1. Run checkUserSession() to detect active Google session
   await checkUserSession();
 
-  // 2. Subscribe to auth state changes (OAuth popup/redirect callback)
   try {
     client.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Mentorini Auth] Auth event state:', event);
       if (session && session.user) {
         await syncGoogleUserToDb(session.user);
       } else if (event === 'SIGNED_OUT') {
@@ -854,10 +697,9 @@ export async function initializeMentoriniApp() {
       }
     });
   } catch (err) {
-    console.warn('[Mentorini Auth] onAuthStateChange notice:', err);
+    console.warn(err);
   }
 
-  // 3. Fetch mentors from unified users table
   const mentors = await fetchMentors();
   const channel = subscribeToMentorsRealtime();
 
@@ -868,7 +710,6 @@ export async function initializeMentoriniApp() {
   };
 }
 
-// Default export
 export default {
   supabase,
   AppStore,
