@@ -144,7 +144,8 @@ class CentralAppStore {
       ? localStorage.getItem(STORAGE_KEYS.ACTIVE_PROFILE_ID) || null
       : null;
 
-    this._state = {
+    this.state = {
+      user: initialUser,
       userSession: initialUser,
       activeUser: initialUser,
       tabRouter: initialTab,
@@ -157,6 +158,7 @@ class CentralAppStore {
       lastSync: null,
       isShareModalOpen: false,
     };
+    this._state = this.state;
   }
 
   _loadJson(key, fallback) {
@@ -179,43 +181,47 @@ class CentralAppStore {
   }
 
   getState() {
-    const watchedArray = Array.from(this._state.watchedVideos);
+    const watchedArray = Array.from(this.state.watchedVideos);
     return {
-      ...this._state,
+      ...this.state,
+      user: this.state.user || this.state.userSession,
+      userSession: this.state.user || this.state.userSession,
+      activeUser: this.state.user || this.state.activeUser,
       watchedVideos: watchedArray,
       watchedVideoIds: watchedArray,
-      videoWatchedStates: this._state.watchedVideos,
+      videoWatchedStates: this.state.watchedVideos,
     };
   }
 
   setState(partial) {
-    const prevState = { ...this._state };
-    this._state = {
-      ...this._state,
+    const prevState = { ...this.state };
+    this.state = {
+      ...this.state,
       ...partial,
     };
+    this._state = this.state;
 
-    if (partial.userSession !== undefined) {
-      this._state.activeUser = partial.userSession;
-      this._saveJson(STORAGE_KEYS.USER_SESSION, partial.userSession);
-    } else if (partial.activeUser !== undefined) {
-      this._state.userSession = partial.activeUser;
-      this._saveJson(STORAGE_KEYS.USER_SESSION, partial.activeUser);
+    const userVal = partial.user !== undefined ? partial.user : (partial.userSession !== undefined ? partial.userSession : partial.activeUser);
+    if (userVal !== undefined) {
+      this.state.user = userVal;
+      this.state.userSession = userVal;
+      this.state.activeUser = userVal;
+      this._saveJson(STORAGE_KEYS.USER_SESSION, userVal);
     }
 
     if (partial.watchedVideos) {
       const setVal = partial.watchedVideos instanceof Set 
         ? partial.watchedVideos 
         : new Set(partial.watchedVideos);
-      this._state.watchedVideos = setVal;
-      this._state.videoWatchedStates = setVal;
+      this.state.watchedVideos = setVal;
+      this.state.videoWatchedStates = setVal;
       this._saveJson(STORAGE_KEYS.WATCHED_VIDEOS, Array.from(setVal));
     } else if (partial.videoWatchedStates) {
       const setVal = partial.videoWatchedStates instanceof Set 
         ? partial.videoWatchedStates 
         : new Set(partial.videoWatchedStates);
-      this._state.watchedVideos = setVal;
-      this._state.videoWatchedStates = setVal;
+      this.state.watchedVideos = setVal;
+      this.state.videoWatchedStates = setVal;
       this._saveJson(STORAGE_KEYS.WATCHED_VIDEOS, Array.from(setVal));
     }
 
@@ -259,19 +265,19 @@ class CentralAppStore {
   setActiveProfile(profileId) {
     this.setState({
       activeProfileId: profileId ? String(profileId) : null,
-      tabRouter: profileId ? 'profile' : this._state.tabRouter,
+      tabRouter: profileId ? 'profile' : this.state.tabRouter,
     });
   }
 
   unlockMentorVideo(mentorId) {
     if (!mentorId) return;
-    const nextSet = new Set(this._state.watchedVideos);
+    const nextSet = new Set(this.state.watchedVideos);
     nextSet.add(String(mentorId));
     this.setState({ watchedVideos: nextSet });
   }
 
   isVideoUnlocked(mentorId) {
-    return this._state.watchedVideos.has(String(mentorId));
+    return this.state.watchedVideos.has(String(mentorId));
   }
 
   setShareModalOpen(isOpen) {
@@ -280,6 +286,7 @@ class CentralAppStore {
 
   clearUserSession() {
     this.setState({
+      user: null,
       userSession: null,
       activeUser: null,
       tabRouter: 'feed',
@@ -288,9 +295,87 @@ class CentralAppStore {
       localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
     }
   }
+
+  async fetchMentors() {
+    return await fetchMentors();
+  }
 }
 
 export const AppStore = new CentralAppStore();
+AppStore.fetchMentors = async () => await fetchMentors();
+
+export function renderEngine() {
+  if (typeof window !== 'undefined' && typeof window.renderEngine === 'function') {
+    window.renderEngine();
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.renderEngine = window.renderEngine || renderEngine;
+}
+
+// ============================================================================
+// REAL-TIME AUTH OBSERVER (Root-level initialization)
+// ============================================================================
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session && session.user) {
+    const user = session.user;
+    let activeProfile = null;
+
+    try {
+      const { data: matchedRows, error: queryErr } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone', user.email);
+
+      if (matchedRows && matchedRows.length > 0) {
+        activeProfile = matchedRows[0];
+      } else {
+        const { data: insertedRows, error: insertErr } = await supabase
+          .from('users')
+          .insert([{ 
+            name: user.user_metadata?.full_name || 'Peer User', 
+            phone: user.email, 
+            status: 'Student', 
+            role: 'mentee' 
+          }])
+          .select();
+
+        if (insertedRows && insertedRows.length > 0) {
+          activeProfile = insertedRows[0];
+        } else {
+          activeProfile = {
+            name: user.user_metadata?.full_name || 'Peer User', 
+            phone: user.email, 
+            status: 'Student', 
+            role: 'mentee' 
+          };
+        }
+      }
+    } catch (err) {
+      activeProfile = {
+        name: user.user_metadata?.full_name || 'Peer User', 
+        phone: user.email, 
+        status: 'Student', 
+        role: 'mentee' 
+      };
+    }
+
+    AppStore.state.user = activeProfile;
+    AppStore.setState({
+      user: activeProfile,
+      userSession: activeProfile,
+      activeUser: activeProfile,
+      tabRouter: 'feed',
+    });
+
+    await AppStore.fetchMentors();
+    renderEngine();
+  } else if (event === 'SIGNED_OUT') {
+    AppStore.clearUserSession();
+    renderEngine();
+  }
+});
 
 export async function loginWithGoogle() {
   AppStore.setState({ isLoading: true, error: null });
@@ -315,124 +400,46 @@ if (typeof window !== 'undefined') {
 
 export const signInWithGoogle = loginWithGoogle;
 
-export async function syncGoogleUserToDb(user) {
-  if (!user) return null;
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
-
-  const id = String(user.id || '');
-  const email = user.email || '';
-  const fullName = user.user_metadata?.full_name || 
-                   user.user_metadata?.name || 
-                   (email ? email.split('@')[0] : 'User');
-  const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
-
-  let syncedRecord = null;
-
-  try {
-    let query = client.from('users').select('*');
-    if (id && email) {
-      query = query.or(`id.eq.${id},email.eq.${email}`);
-    } else if (id) {
-      query = query.eq('id', id);
-    } else {
-      query = query.eq('email', email);
-    }
-
-    const { data: existingUser, error: selectErr } = await query.maybeSingle();
-
-    if (existingUser && !selectErr) {
-      syncedRecord = {
-        id: String(existingUser.id),
-        name: existingUser.name || fullName,
-        email: existingUser.email || email,
-        phone: existingUser.phone || '',
-        whatsappNumber: existingUser.phone || '',
-        status: existingUser.status || 'Active Member',
-        role: existingUser.role || 'mentee',
-        bio: existingUser.bio || '',
-        video_url: existingUser.video_url || '',
-        avatar_url: existingUser.avatar_url || avatarUrl,
-        createdAt: existingUser.created_at || new Date().toISOString(),
-      };
-
-      if (!existingUser.email && email) {
-        await client.from('users').update({ email, name: fullName }).eq('id', existingUser.id);
-      }
-    } else {
-      const defaultPeerRecord = {
-        id: id,
-        name: fullName,
-        email: email,
-        bio: '',
-        video_url: '',
-        status: 'Active Member',
-        role: 'mentee',
-      };
-
-      const { data: inserted, error: insertErr } = await client
-        .from('users')
-        .insert([defaultPeerRecord])
-        .select()
-        .maybeSingle();
-
-      if (insertErr) {
-        const { data: fallbackInserted } = await client
-          .from('users')
-          .insert([{
-            name: fullName,
-            email: email,
-            bio: '',
-            video_url: '',
-            status: 'Active Member',
-            role: 'mentee',
-          }])
-          .select()
-          .maybeSingle();
-
-        syncedRecord = fallbackInserted || { ...defaultPeerRecord, id: `user-${Date.now()}` };
-      } else {
-        syncedRecord = inserted || defaultPeerRecord;
-      }
-    }
-  } catch (err) {
-    syncedRecord = {
-      id: id || `user-${Date.now()}`,
-      name: fullName,
-      email: email,
-      bio: '',
-      video_url: '',
-      status: 'Active Member',
-      role: 'mentee',
-      avatar_url: avatarUrl,
-      createdAt: new Date().toISOString(),
-    };
-  }
-
-  AppStore.setState({
-    userSession: syncedRecord,
-    activeUser: syncedRecord,
-    tabRouter: 'feed',
-    isLoading: false,
-  });
-
-  return syncedRecord;
-}
-
 export async function checkUserSession() {
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
-
   try {
     const { data, error } = await client.auth.getUser();
     if (error || !data || !data.user) {
-      const cached = AppStore.getState().userSession;
-      return cached || null;
+      return AppStore.getState().user || null;
+    }
+    const user = data.user;
+    let activeProfile = null;
+    try {
+      const { data: matchedRows } = await client
+        .from('users')
+        .select('*')
+        .eq('phone', user.email);
+
+      if (matchedRows && matchedRows.length > 0) {
+        activeProfile = matchedRows[0];
+      }
+    } catch (e) {
+      // ignore
     }
 
-    const verifiedUser = data.user;
-    const syncedProfile = await syncGoogleUserToDb(verifiedUser);
-    return syncedProfile;
+    if (!activeProfile) {
+      activeProfile = {
+        name: user.user_metadata?.full_name || 'Peer User',
+        phone: user.email,
+        status: 'Student',
+        role: 'mentee',
+      };
+    }
+
+    AppStore.state.user = activeProfile;
+    AppStore.setState({
+      user: activeProfile,
+      userSession: activeProfile,
+      activeUser: activeProfile,
+    });
+    return activeProfile;
   } catch (err) {
-    return AppStore.getState().userSession || null;
+    return AppStore.getState().user || null;
   }
 }
 
@@ -440,11 +447,9 @@ if (typeof window !== 'undefined') {
   window.checkUserSession = checkUserSession;
 }
 
-export const syncAuthenticatedUser = syncGoogleUserToDb;
-
 export async function updateProfileContent(bio, videoUrl) {
   const state = AppStore.getState();
-  const user = state.userSession || state.activeUser;
+  const user = state.user || state.userSession || state.activeUser;
   const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
   if (!user) {
@@ -462,29 +467,22 @@ export async function updateProfileContent(bio, videoUrl) {
   AppStore.setState({ isLoading: true, error: null });
 
   try {
-    const { data, error } = await client
-      .from('users')
-      .update({
-        bio: trimmedBio,
-        video_url: trimmedVideoUrl,
-        role: 'mentor',
-        status: 'Peer Mentor IT',
-      })
-      .eq('id', user.id);
+    let updateQuery = client.from('users').update({
+      bio: trimmedBio,
+      video_url: trimmedVideoUrl,
+      role: 'mentor',
+      status: 'Peer Mentor IT',
+    });
 
-    if (error) {
-      if (user.email) {
-        await client
-          .from('users')
-          .update({
-            bio: trimmedBio,
-            video_url: trimmedVideoUrl,
-            role: 'mentor',
-            status: 'Peer Mentor IT',
-          })
-          .eq('email', user.email);
-      }
+    if (user.id) {
+      updateQuery = updateQuery.eq('id', user.id);
+    } else if (user.phone) {
+      updateQuery = updateQuery.eq('phone', user.phone);
+    } else if (user.email) {
+      updateQuery = updateQuery.eq('email', user.email);
     }
+
+    const { data, error } = await updateQuery;
 
     const updatedUser = {
       ...user,
@@ -494,14 +492,17 @@ export async function updateProfileContent(bio, videoUrl) {
       status: 'Peer Mentor IT',
     };
 
+    AppStore.state.user = updatedUser;
     AppStore.setState({
+      user: updatedUser,
       userSession: updatedUser,
       activeUser: updatedUser,
       isLoading: false,
       isShareModalOpen: false,
     });
 
-    await fetchMentors();
+    await AppStore.fetchMentors();
+    renderEngine();
 
     return { success: true, user: updatedUser };
   } catch (err) {
@@ -513,14 +514,17 @@ export async function updateProfileContent(bio, videoUrl) {
       status: 'Peer Mentor IT',
     };
 
+    AppStore.state.user = updatedUser;
     AppStore.setState({
+      user: updatedUser,
       userSession: updatedUser,
       activeUser: updatedUser,
       isLoading: false,
       isShareModalOpen: false,
     });
 
-    await fetchMentors();
+    await AppStore.fetchMentors();
+    renderEngine();
     return { success: true, user: updatedUser };
   }
 }
@@ -530,7 +534,7 @@ if (typeof window !== 'undefined') {
 }
 
 export async function updateUserKnowledge({ bio, videoUrl, phone }) {
-  const user = AppStore.getState().userSession;
+  const user = AppStore.state.user || AppStore.getState().userSession;
   if (user && phone) {
     user.phone = cleanPhoneNumber(phone);
     user.whatsappNumber = cleanPhoneNumber(phone);
@@ -556,11 +560,11 @@ export async function fetchMentors() {
       fetchedMentors = usersData
         .filter((u) => u.role === 'mentor' || (u.video_url && String(u.video_url).trim().length > 0))
         .map((u) => ({
-          id: String(u.id),
+          id: String(u.id || u.phone || Math.random()),
           name: u.name || 'Peer Mentor',
-          email: u.email || '',
+          email: u.email || (String(u.phone).includes('@') ? u.phone : ''),
           phone: u.phone || '',
-          whatsappNumber: u.phone || '',
+          whatsappNumber: u.whatsapp_number || u.phone || '',
           status: u.status || 'Peer Mentor IT',
           role: u.role || 'mentor',
           bio: u.bio || 'Partage des connaissances en IT bel Tounsi.',
@@ -681,27 +685,13 @@ export async function signOutUser() {
     console.warn(err);
   }
   AppStore.clearUserSession();
+  renderEngine();
 }
 
 export async function initializeMentoriniApp() {
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
-
-  await checkUserSession();
-
-  try {
-    client.auth.onAuthStateChange(async (event, session) => {
-      if (session && session.user) {
-        await syncGoogleUserToDb(session.user);
-      } else if (event === 'SIGNED_OUT') {
-        AppStore.clearUserSession();
-      }
-    });
-  } catch (err) {
-    console.warn(err);
-  }
-
   const mentors = await fetchMentors();
   const channel = subscribeToMentorsRealtime();
+  renderEngine();
 
   return {
     store: AppStore,
@@ -716,7 +706,6 @@ export default {
   loginWithGoogle,
   signInWithGoogle,
   checkUserSession,
-  syncAuthenticatedUser,
   updateProfileContent,
   updateUserKnowledge,
   fetchMentors,
@@ -726,5 +715,6 @@ export default {
   extractYouTubeId,
   initializeMentoriniApp,
   signOutUser,
+  renderEngine,
   SEED_MENTORS,
 };

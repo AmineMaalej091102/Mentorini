@@ -1092,6 +1092,11 @@ export function mountApp(targetElement = '#app-viewport', store = AppStore) {
     updateNavButtons(state.tabRouter || 'feed');
   };
 
+  // Expose renderEngine globally so app.js can trigger re-renders on auth events
+  if (typeof window !== 'undefined') {
+    window.renderEngine = render;
+  }
+
   if (!container) {
     const timer = setTimeout(() => {
       render();
