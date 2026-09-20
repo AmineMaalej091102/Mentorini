@@ -2,18 +2,20 @@
  * Mentorini - Peer-Mentorship for the Tunisian IT Ecosystem
  * Frontend Presentation View Engine (ui.js)
  * 
- * Re-architected for Zero-Friction Social-Learning Network:
- * - 2-Field Zero-Friction Onboarding (Name + WhatsApp) with zero video requirements on Day 1
- * - Phone-based authentication with direct lookup in unified 'users' table
- * - Social Creator Engine: Prominent '+' button opening "Abda share el knowledge mte3ek" modal
- * - Mobile Hardware Navigation Overrides (safe area inset bottom)
- * - Authentic, friendly Tunisian Arabizi chat-dialect (using 3, 7, 9)
+ * Re-architected for Egalitarian Social-Learning Network (Instagram Model):
+ * - Unified Free Google Authentication (Supabase Google OAuth native flow)
+ * - Single 1-Tap Onboarding Gateway with Authentic Arabizi Manifesto
+ * - Zero Dual-Track segregation: Everyone starts as an equal peer
+ * - Peer Creator Engine: Persistent floating '+' Action button sliding up modal configuration pane
+ * - Horizontal Aspect-Ratio (16:9) YouTube embed player & Bio Drive/GitHub parser
+ * - Mobile Hardware Navigation Safe Area Overrides (padding-bottom: calc(16px + env(safe-area-inset-bottom)))
+ * - Authentic, friendly Tunisian Arabizi chat-dialect (3, 7, 9)
  */
 
 import { 
   AppStore, 
-  handleSignUp, 
-  handleSignIn, 
+  signInWithGoogle, 
+  signOutUser,
   updateUserKnowledge,
   fetchMentors, 
   executeWhatsAppRedirect, 
@@ -71,40 +73,35 @@ if (typeof window !== 'undefined') {
       AppStore.setActiveProfile(mentorId);
     },
 
-    // Logout session
-    logout: () => {
-      AppStore.clearUserSession();
-    },
+    // Unified 1-Tap Google Sign In
+    signInWithGoogle: async () => {
+      const feedbackEl = document.getElementById('auth-feedback');
+      if (feedbackEl) {
+        feedbackEl.className = 'p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold mb-3';
+        feedbackEl.innerHTML = '⏳ 9a3din n-connectiw fik bel Google mte3ek...';
+        feedbackEl.classList.remove('hidden');
+      }
 
-    // Role selection in Zero-Friction Sign Up
-    selectRole: (role) => {
-      const hiddenRole = document.getElementById('hidden-role-input');
-      const roleRadioMentee = document.getElementById('role-mentee-radio');
-      const roleRadioMentor = document.getElementById('role-mentor-radio');
-      const roleCardMentee = document.getElementById('role-card-mentee');
-      const roleCardMentor = document.getElementById('role-card-mentor');
-
-      if (hiddenRole) hiddenRole.value = role;
-
-      if (role === 'mentor') {
-        if (roleRadioMentor) roleRadioMentor.checked = true;
-        if (roleRadioMentee) roleRadioMentee.checked = false;
-        if (roleCardMentor) {
-          roleCardMentor.className = 'flex-1 p-3 rounded-2xl border-2 border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 cursor-pointer transition-all shadow-sm';
+      try {
+        const result = await signInWithGoogle();
+        if (result && result.user) {
+          if (feedbackEl) {
+            feedbackEl.className = 'p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold mb-3';
+            feedbackEl.innerHTML = `🎉 Mar7be bik ya ${result.user.name}! Dkhalna direct fil feed.`;
+          }
         }
-        if (roleCardMentee) {
-          roleCardMentee.className = 'flex-1 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 cursor-pointer transition-all opacity-75';
-        }
-      } else {
-        if (roleRadioMentee) roleRadioMentee.checked = true;
-        if (roleRadioMentor) roleRadioMentor.checked = false;
-        if (roleCardMentee) {
-          roleCardMentee.className = 'flex-1 p-3 rounded-2xl border-2 border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 cursor-pointer transition-all shadow-sm';
-        }
-        if (roleCardMentor) {
-          roleCardMentor.className = 'flex-1 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 cursor-pointer transition-all opacity-75';
+      } catch (err) {
+        if (feedbackEl) {
+          feedbackEl.className = 'p-3 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-bold mb-3';
+          feedbackEl.innerHTML = `⚠️ Oops! ${err.message || 'Mochkla fi Google Login.'}`;
+          feedbackEl.classList.remove('hidden');
         }
       }
+    },
+
+    // Logout session
+    logout: async () => {
+      await signOutUser();
     },
 
     // Video-Watch Lock trigger: unlocks when user plays/clicks video poster
@@ -136,72 +133,14 @@ if (typeof window !== 'undefined') {
       executeWhatsAppRedirect(phone, text);
     },
 
-    // Zero-Friction Sign Up (2 fields: Name & WhatsApp)
-    handleSignUpSubmit: async (event) => {
-      event.preventDefault();
-      const form = event.target;
-      const feedbackEl = document.getElementById('signup-feedback');
-      const role = form.role ? form.role.value : 'mentee';
-      const name = form.name ? form.name.value.trim() : '';
-      const phone = form.phone ? form.phone.value.trim() : '';
-
-      if (feedbackEl) {
-        feedbackEl.className = 'p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold mb-3';
-        feedbackEl.innerHTML = '⏳ 9a3din nsajlou fil compte mte3ek fil base...';
-        feedbackEl.classList.remove('hidden');
-      }
-
-      try {
-        const session = await handleSignUp({ name, phone, role });
-        if (feedbackEl) {
-          feedbackEl.className = 'p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold mb-3';
-          feedbackEl.innerHTML = `🎉 Mabrouk ya ${session.name}! Tawa tconnectit direct fil feed.`;
-        }
-        setTimeout(() => {
-          AppStore.setTab('feed');
-        }, 600);
-      } catch (err) {
-        if (feedbackEl) {
-          feedbackEl.className = 'p-3 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-bold mb-3';
-          feedbackEl.innerHTML = `⚠️ Oops! ${err.message || 'Thabbet fil ma3loumet mte3ek.'}`;
-          feedbackEl.classList.remove('hidden');
-        }
-      }
-    },
-
-    // Instant Phone-Based Sign In
-    handleSignInSubmit: async (event) => {
-      event.preventDefault();
-      const form = event.target;
-      const phoneInput = form.phone ? form.phone.value.trim() : '';
-      const feedbackEl = document.getElementById('signin-feedback');
-
-      if (feedbackEl) {
-        feedbackEl.className = 'p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold mb-3';
-        feedbackEl.innerHTML = '⏳ 9a3din nlawjou 3la noumrouk fil base...';
-        feedbackEl.classList.remove('hidden');
-      }
-
-      const result = await handleSignIn(phoneInput);
-      if (result.success) {
-        if (feedbackEl) {
-          feedbackEl.className = 'p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold mb-3';
-          feedbackEl.innerHTML = `✅ Mar7be bik ya ${result.user.name}! Dkhalna fil feed.`;
-        }
-      } else if (feedbackEl) {
-        feedbackEl.className = 'p-3 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-bold mb-3';
-        feedbackEl.innerHTML = `⚠️ ${result.error}`;
-      }
-    },
-
-    // Open Social Creator Engine Modal Sheet
+    // Open Peer Creator Engine Modal Sheet (The '+' Button)
     openShareModal: () => {
       const state = AppStore.getState();
       const user = state.userSession || state.activeUser;
       if (!user) {
-        const confirmGo = confirm('Lazmek tkoun connecti b compte se3a bech t-partagi knowledge! T7eb tsajjel tawa fi d9i9a?');
+        const confirmGo = confirm('Lazmek tkoun connecti bel Google mte3ek bech t-partagi! T7eb tconnecti tawa b clique wa7da?');
         if (confirmGo) {
-          AppStore.setTab('signup');
+          window.MentoriniActions.signInWithGoogle();
         }
         return;
       }
@@ -210,15 +149,19 @@ if (typeof window !== 'undefined') {
         modal.classList.remove('hidden');
         const bioInput = document.getElementById('share-bio-input');
         const videoInput = document.getElementById('share-video-input');
+        const phoneInput = document.getElementById('share-phone-input');
         if (bioInput && user.bio) bioInput.value = user.bio;
         if (videoInput && (user.video_url || user.youtubeUrl)) {
           videoInput.value = user.video_url || user.youtubeUrl;
+        }
+        if (phoneInput && user.phone) {
+          phoneInput.value = user.phone;
         }
       }
       AppStore.setShareModalOpen(true);
     },
 
-    // Close Social Creator Engine Modal Sheet
+    // Close Peer Creator Engine Modal Sheet
     closeShareModal: () => {
       const modal = document.getElementById('share-knowledge-modal');
       if (modal) {
@@ -227,18 +170,19 @@ if (typeof window !== 'undefined') {
       AppStore.setShareModalOpen(false);
     },
 
-    // Handle Knowledge Sharing submission
+    // Handle Knowledge Sharing submission (fires public patch query to database)
     handleShareKnowledge: async (event) => {
       event.preventDefault();
       const form = event.target;
       const bio = form.bio ? form.bio.value.trim() : '';
       const videoUrl = form.videoUrl ? form.videoUrl.value.trim() : '';
+      const phone = form.phone ? form.phone.value.trim() : '';
       const feedbackEl = document.getElementById('share-feedback');
 
       if (!bio) {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-bold mb-3';
-          feedbackEl.innerHTML = '⚠️ A3mel bio 9sira w 7ot feha chnowa tnajjem t3awen w les liens mte3ek.';
+          feedbackEl.innerHTML = '⚠️ A3mel bio 9sira w 7ot feha chnowa tnajjem t3awen w les liens Drive/GitHub mte3ek.';
           feedbackEl.classList.remove('hidden');
         }
         return;
@@ -246,21 +190,21 @@ if (typeof window !== 'undefined') {
 
       if (feedbackEl) {
         feedbackEl.className = 'p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold mb-3';
-        feedbackEl.innerHTML = '⏳ 9a3din n-syncou fil knowledge mte3ek fil cloud...';
+        feedbackEl.innerHTML = '⏳ 9a3din n-syncou fil knowledge mte3ek fil cloud (patch query)...';
         feedbackEl.classList.remove('hidden');
       }
 
       try {
-        const result = await updateUserKnowledge({ bio, videoUrl });
+        const result = await updateUserKnowledge({ bio, videoUrl, phone });
         if (result.success) {
           if (feedbackEl) {
             feedbackEl.className = 'p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold mb-3';
-            feedbackEl.innerHTML = '🚀 Sa77a ya patron! L-knowledge mte3ek t-partaga tawa direct fil feed!';
+            feedbackEl.innerHTML = '🚀 Sa77a ya creator! L-statut mte3ek tbadal l-mentor w t-partaga tawa fil feed!';
           }
           setTimeout(() => {
             window.MentoriniActions.closeShareModal();
             AppStore.setTab('feed');
-          }, 900);
+          }, 800);
         }
       } catch (err) {
         if (feedbackEl) {
@@ -291,260 +235,113 @@ export function formatBioWithPills(text) {
     if (url.includes('drive.google')) label = '📁 Google Drive';
     else if (url.includes('github.com')) label = '💻 GitHub';
     else if (url.includes('notion')) label = '📝 Notion';
+    else if (url.includes('youtube.com') || url.includes('youtu.be')) label = '▶ Video 16:9';
 
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded text-[11px] hover:underline mx-0.5">${label} ↗</a>`;
   });
 }
 
 // ============================================================================
-// 3. VIEW 1: ZERO-FRICTION 2-FIELD SIGN UP VIEW
+// 3. VIEW 1: EGALITARIAN ONBOARDING GATEWAY (INSTAGRAM EQUALITY MODEL)
 // ============================================================================
 
 /**
- * View 1 (Sign Up): Bare-minimum 2-field form (Name + WhatsApp).
- * No mandatory video URLs, no descriptions, mentors can join with zero uploads on Day 1.
+ * Egalitarian Onboarding Gateway
+ * - Removed Dual-Track role buttons completely. Everyone enters as equal peers.
+ * - Single bold Text Manifesto in natural, friendly Arabizi:
+ *   "Saving your Time and Energy by grouping filtered peer mentors in one click instead of searching the endless sea of YouTube."
+ * - Single 1-tap button: "💬 Edkhel bel Google mte3ek"
  */
 export function renderSignUpView(state = {}) {
   return `
     <section class="p-4 space-y-4 animate-fadeIn">
       
-      <!-- Brand & Zero-Cost Status Pill -->
+      <!-- Top Pill Status -->
       <div class="flex items-center justify-between">
-        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Zero-Cost ($0) Peer Mentorship 🇹🇳</span>
+          <span>Egalitarian Peer Network • 100% Free 🇹🇳</span>
         </div>
         <span class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400">Bac Info & IT Pro</span>
       </div>
 
-      <!-- High-Converting Value Manifesto Card in Arabizi -->
-      <div class="bg-gradient-to-b from-indigo-50/90 via-white to-zinc-50 dark:from-indigo-950/40 dark:via-zinc-900 dark:to-zinc-950 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl p-4.5 shadow-sm">
-        <h1 class="text-xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 leading-snug mb-2">
+      <!-- High-Impact Value Manifesto Card in Arabizi -->
+      <div class="bg-gradient-to-b from-indigo-50/90 via-white to-zinc-50 dark:from-indigo-950/40 dark:via-zinc-900 dark:to-zinc-950 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl p-5 shadow-sm space-y-3">
+        
+        <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100/80 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-mono font-black uppercase tracking-wide">
+          ✨ Zero-Friction Social Learning
+        </div>
+
+        <h1 class="text-xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 leading-snug">
           Erba7 a3az zouz 7weyej 3andek: <br/>
           <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
             Wa9tek w l'Energie mte3ek.
           </span>
         </h1>
         
-        <p class="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium mb-3">
-          Fi 3oudh ma tdhi3 fi <strong>b7ar YouTube</strong> mta3 50 sa3a w forums 9dom w ma ta3rafch chkoun tsada9, l9inalek 
-          <span class="font-bold underline decoration-indigo-500 decoration-2 text-zinc-900 dark:text-white">peer mentors mfiltrin b clique wa7da</span>.
+        <p class="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">
+          <strong>Saving your Time and Energy by grouping filtered peer mentors in one click instead of searching the endless sea of YouTube.</strong> Fi 3oudh ma tdhi3 fi b7ar YouTube mta3 50 sa3a w forums 9dom, Mentorini ygroupilik peer mentors mfiltrin b clique wa7da bel Tounsi mte3na.
         </p>
 
-        <!-- 3 Core Pillars -->
-        <div class="space-y-1.5 text-xs text-zinc-800 dark:text-zinc-200">
+        <!-- Egalitarian Features -->
+        <div class="space-y-2 pt-1 text-xs text-zinc-800 dark:text-zinc-200">
           <div class="flex items-center gap-2">
-            <span class="text-emerald-500 font-bold">✓</span>
-            <span><strong>Feynman Concept:</strong> Kol mentor yfasser concept bel Tounsi mte3na.</span>
+            <span class="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center text-xs font-black shrink-0">✓</span>
+            <span><strong>Instagram Equality:</strong> Dkhol blech 9youyat. Kol mentee ynajem ykoun creator bel bouton (+).</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-emerald-500 font-bold">✓</span>
-            <span><strong>Video-Watch Lock:</strong> Tfarrej fil video bech t-unlooki l-WhatsApp mte3ou direct.</span>
+            <span class="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center text-xs font-black shrink-0">✓</span>
+            <span><strong>Feynman Technique:</strong> Des concepts IT s3ab mfassrin fi 5 d9aye9 bel lahja mte3na.</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-emerald-500 font-bold">✓</span>
-            <span><strong>100% Free:</strong> Zero frais ($0). Direct connection bin mentee w mentor.</span>
+            <span class="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center text-xs font-black shrink-0">✓</span>
+            <span><strong>Video-Watch Lock:</strong> Tfarrej fil video bech t-unlooki l-WhatsApp mte3ou direct blech $0.</span>
           </div>
         </div>
       </div>
 
-      <!-- Zero-Friction Registration Card Container -->
-      <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4.5 shadow-sm space-y-4">
+      <!-- 1-Tap Google Authentication Container -->
+      <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-4">
         
-        <div>
+        <div class="text-center space-y-1">
           <h2 class="text-base font-black text-zinc-900 dark:text-zinc-50">
-            Créer un Compte Jdid (2 Champs Kahw)
+            Dkhol direct b clique wa7da
           </h2>
-          <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Sajjel esmek w noumrouk kahw. Mentors ynajmou ydokhlo b zero videos 3la YouTube!
+          <p class="text-xs text-zinc-500 dark:text-zinc-400">
+            Blech formulaires twila, blech mot de passe yetnsa.
           </p>
-        </div>
-
-        <!-- Dual Role Choice Selector Cards -->
-        <div class="grid grid-cols-2 gap-2.5">
-          
-          <!-- Role 1: Mentee -->
-          <div 
-            id="role-card-mentee" 
-            onclick="MentoriniActions.selectRole('mentee')"
-            class="flex-1 p-3 rounded-2xl border-2 border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 cursor-pointer transition-all shadow-sm"
-          >
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-base">📖</span>
-              <input type="radio" id="role-mentee-radio" name="role_toggle" value="mentee" checked class="text-indigo-600 focus:ring-indigo-500" />
-            </div>
-            <p class="text-xs font-black text-zinc-900 dark:text-white leading-tight">
-              T7eb Tet3alem Kahw
-            </p>
-            <p class="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-              (Mentee - Bac / Fac)
-            </p>
-          </div>
-
-          <!-- Role 2: Mentor -->
-          <div 
-            id="role-card-mentor" 
-            onclick="MentoriniActions.selectRole('mentor')"
-            class="flex-1 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 cursor-pointer transition-all opacity-75"
-          >
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-base">🛠️</span>
-              <input type="radio" id="role-mentor-radio" name="role_toggle" value="mentor" class="text-indigo-600 focus:ring-indigo-500" />
-            </div>
-            <p class="text-xs font-black text-zinc-900 dark:text-white leading-tight">
-              T7eb T3awen + Tet3alem
-            </p>
-            <p class="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-              (Peer Mentor IT)
-            </p>
-          </div>
-
-        </div>
-
-        <!-- Day 1 Zero-Upload Reassurance Banner -->
-        <div class="bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 rounded-xl p-2.5 text-[11px] text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
-          <span class="text-sm shrink-0">✨</span>
-          <span><strong>Day 1 Zero-Friction:</strong> Mentors ynajmou ydokhlo tawa b zero uploads. Tnajjem t-partagi l-knowledge mte3ek wa9t ma t7eb bel bouton (+).</span>
         </div>
 
         <!-- Feedback Alert Banner -->
-        <div id="signup-feedback" class="hidden"></div>
+        <div id="auth-feedback" class="hidden"></div>
 
-        <!-- Zero-Friction 2-Field Form -->
-        <form onsubmit="MentoriniActions.handleSignUpSubmit(event)" class="space-y-3.5 text-xs">
-          
-          <input type="hidden" name="role" value="mentee" id="hidden-role-input" />
+        <!-- THE 1-TAP GOOGLE AUTHENTICATION BUTTON -->
+        <button 
+          type="button" 
+          onclick="MentoriniActions.signInWithGoogle()"
+          class="w-full py-3.5 px-4 rounded-xl bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 active:scale-[0.98] text-zinc-800 dark:text-white text-xs font-black tracking-wide shadow-md border border-zinc-300 dark:border-zinc-700 flex items-center justify-center gap-3 transition-all cursor-pointer"
+        >
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span>💬 Edkhel bel Google mte3ek</span>
+        </button>
 
-          <!-- Field 1: Name -->
-          <div>
-            <label class="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
-              Esmek w La9bek <span class="text-red-500">*</span>
-            </label>
-            <input 
-              type="text" 
-              name="name" 
-              required 
-              placeholder="Ex: Yassine Ben Salem" 
-              class="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/70 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
-          <!-- Field 2: WhatsApp Phone -->
-          <div>
-            <label class="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
-              Noumrou Tel / WhatsApp 🇹🇳 <span class="text-red-500">*</span>
-            </label>
-            <input 
-              type="tel" 
-              name="phone" 
-              required 
-              placeholder="Ex: 98123456 wala 21698123456" 
-              class="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/70 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <p class="text-[10px] text-zinc-400 mt-1">
-              Noumrouk safe: yet7att direct fil base w yet-unlooka bil Video-Watch Lock.
-            </p>
-          </div>
-
-          <!-- Submit Button -->
-          <div class="pt-2">
-            <button 
-              type="submit" 
-              class="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-black tracking-wide shadow-lg shadow-indigo-600/30 transition-all border border-indigo-500 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span>🚀</span>
-              <span>Sajjel Rou7ek Tawa (100% Gratuit)</span>
-            </button>
-          </div>
-
-        </form>
-
-        <!-- Route to Sign In -->
-        <div class="pt-3 border-t border-zinc-100 dark:border-zinc-800 text-center">
-          <p class="text-xs text-zinc-500 dark:text-zinc-400">
-            3andek déjà compte msajjel?
-          </p>
-          <button 
-            type="button" 
-            onclick="MentoriniActions.setTab('signin')" 
-            class="mt-1 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-          >
-            Connecti houni (Sign In) →
-          </button>
-        </div>
-
-      </div>
-
-    </section>
-  `;
-}
-
-// ============================================================================
-// 4. VIEW 2: SIGN IN (SLEEK MINIMAL PHONE LOGIN)
-// ============================================================================
-
-/**
- * View 2 (Sign In): Sleek, minimal phone-number login interface.
- * Matches clean 'phone' column in unified 'users' table.
- */
-export function renderSignInView(state = {}) {
-  return `
-    <section class="p-4 space-y-4 animate-fadeIn">
-      
-      <div class="text-center py-4">
-        <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black text-xl mb-2.5 shadow-inner">
-          🔑
-        </div>
-        <h2 class="text-xl font-black tracking-tight text-zinc-900 dark:text-zinc-50">
-          Connecti fil Espace mte3ek
-        </h2>
-        <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-[280px] mx-auto">
-          A3tina noumrou tel / WhatsApp mte3ek bech nconnectouk direct lil feed.
+        <p class="text-[10px] text-center text-zinc-400 font-medium">
+          🔒 Données sécurisées via Supabase Auth. Accès 100% gratuit lil feed.
         </p>
-      </div>
 
-      <!-- Sleek Phone Sign In Card -->
-      <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
-        
-        <div id="signin-feedback" class="hidden"></div>
-
-        <form onsubmit="MentoriniActions.handleSignInSubmit(event)" class="space-y-4">
-          <div>
-            <label class="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Noumrou Tel / WhatsApp 🇹🇳 <span class="text-red-500">*</span>
-            </label>
-            <input 
-              type="tel" 
-              name="phone" 
-              required 
-              placeholder="Ex: 98123456 wala 21698123456" 
-              class="w-full px-3.5 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-zinc-400"
-            />
-            <p class="text-[10px] text-zinc-400 mt-1">
-              Kanik msajjel fi Mentorini, database tconnectik direct.
-            </p>
-          </div>
-
-          <button 
-            type="submit" 
-            class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <span>Dkhol Tawa (Sign In)</span>
-            <span>→</span>
-          </button>
-        </form>
-
-        <!-- Anchor Link back to Sign Up -->
-        <div class="mt-5 pt-4 border-t border-zinc-100 dark:border-zinc-800 text-center">
-          <p class="text-xs text-zinc-500 dark:text-zinc-400">
-            Mazelt ma 3maltech compte?
-          </p>
+        <!-- Direct browse link -->
+        <div class="pt-2 border-t border-zinc-100 dark:border-zinc-800 text-center">
           <button 
             type="button" 
-            onclick="MentoriniActions.setTab('signup')" 
-            class="mt-1.5 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+            onclick="MentoriniActions.setTab('feed')" 
+            class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
           >
-            Mazelt ma 3maltech compte? Sajjel houni fi d9i9a 🚀
+            T7eb tchouf el feed se3a? Chouf les mentors houni →
           </button>
         </div>
 
@@ -554,20 +351,24 @@ export function renderSignInView(state = {}) {
   `;
 }
 
+// Route sign in to unified onboarding
+export function renderSignInView(state = {}) {
+  return renderSignUpView(state);
+}
+
 // ============================================================================
-// 5. VIEW 3: UNIVERSAL FEED (DISCOVERY CARDS & VIDEO-WATCH LOCK)
+// 4. VIEW 2: UNIVERSAL FEED (IDENTICAL FOR ALL USERS)
 // ============================================================================
 
 export function renderContactButton(mentor, isUnlocked) {
   const hasVideo = Boolean(mentor.youtubeVideoId || mentor.youtubeUrl || mentor.video_url);
 
-  // If mentor has zero video (Day 1 join), direct WhatsApp is available with friendly prompt
   if (!hasVideo || isUnlocked) {
     return `
       <button 
         type="button" 
         onclick="MentoriniActions.connectWhatsApp('${mentor.whatsappNumber || mentor.phone}', '${(mentor.name || '').replace(/'/g, "\\'")}', '${(mentor.feynmanTopic || '').replace(/'/g, "\\'")}')"
-        class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition-all border border-indigo-500 animate-pulse cursor-pointer"
+        class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition-all border border-indigo-500 cursor-pointer animate-pulse"
       >
         <span>💬</span>
         <span>Connecti direct 3la WhatsApp</span>
@@ -615,11 +416,7 @@ export function renderFeedSummaryCard(mentor, isUnlocked = false) {
                 <span class="px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px] font-black border border-amber-300 dark:border-amber-800">
                   ★ Flagship
                 </span>
-              ` : (!hasVideo ? `
-                <span class="px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-black border border-emerald-300 dark:border-emerald-800">
-                  🌱 Day 1 Mentor
-                </span>
-              ` : '')}
+              ` : ''}
             </div>
             <p class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold truncate">
               ${mentor.status || 'Peer Mentor IT'}
@@ -632,7 +429,7 @@ export function renderFeedSummaryCard(mentor, isUnlocked = false) {
         </span>
       </div>
 
-      <!-- Video Poster or Bio Preview -->
+      <!-- Horizontal (16:9) Video Embed Preview or Bio -->
       <div class="px-4 pb-3">
         ${hasVideo ? `
           <div class="relative aspect-video w-full rounded-xl overflow-hidden bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center group-hover:border-indigo-500/50 transition-colors">
@@ -646,7 +443,7 @@ export function renderFeedSummaryCard(mentor, isUnlocked = false) {
                 <span class="text-white text-sm font-black ml-0.5">▶</span>
               </div>
               <p class="text-xs font-bold text-white">
-                Tfarrej fil Concept bel Tounsi
+                Tfarrej fil Concept (16:9 bel Tounsi)
               </p>
               <p class="text-[10px] text-zinc-400 mt-0.5">
                 ${isUnlocked ? '✅ Unlocked! Click bech tchouf l-profile' : '🔒 Click bech t-unlooki l-WhatsApp mte3ou'}
@@ -687,23 +484,23 @@ export function renderUniversalFeed(state = {}) {
   return `
     <section class="p-4 space-y-4 animate-fadeIn">
       
-      <!-- Top Gateway Banner with Creator Engine Link -->
-      <div class="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-200 dark:border-indigo-900/60 rounded-2xl p-3.5 flex items-center justify-between">
+      <!-- Top Gateway Banner with Prominent Creator Engine Link -->
+      <div class="bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-transparent border border-indigo-200 dark:border-indigo-900/60 rounded-2xl p-3.5 flex items-center justify-between shadow-sm">
         <div>
-          <p class="text-xs font-bold text-zinc-900 dark:text-white">
+          <p class="text-xs font-black text-zinc-900 dark:text-white">
             Erba7 wa9tek w l'energie mte3ek.
           </p>
           <p class="text-[11px] text-zinc-500 dark:text-zinc-400">
-            Peer mentors mfiltrin bel lahja mte3na 🇹🇳
+            Tounsi IT Peer Mentors • 16:9 Feynman Videos
           </p>
         </div>
         <button 
           type="button" 
           onclick="MentoriniActions.openShareModal()"
-          class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 active:scale-95 text-white font-bold text-xs shadow-sm transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer"
+          class="px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 active:scale-95 text-white font-black text-xs shadow-md transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer"
         >
-          <span>＋</span>
-          <span>Share Knowledge</span>
+          <span class="text-sm font-black">＋</span>
+          <span>Abda Share</span>
         </button>
       </div>
 
@@ -740,7 +537,7 @@ export function renderUniversalFeed(state = {}) {
 }
 
 // ============================================================================
-// 6. VIEW 4: PROFILE VIEW (INDIVIDUAL MENTOR INSPECTOR)
+// 5. VIEW 3: PROFILE VIEW (INDIVIDUAL MENTOR INSPECTOR)
 // ============================================================================
 
 export function renderProfileView(state = {}) {
@@ -815,12 +612,12 @@ export function renderProfileView(state = {}) {
         </div>
       </div>
 
-      <!-- Embed YouTube aspect-video Wrapper (If video is present) -->
+      <!-- Horizontal (16:9) Embed YouTube aspect-video Wrapper -->
       ${hasVideo ? `
         <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
           
           <div class="bg-zinc-900 text-zinc-200 px-4 py-2 text-xs font-bold flex items-center justify-between border-b border-zinc-800">
-            <span class="truncate">Feynman Concept: <strong class="text-white font-black">${mentor.feynmanTopic || 'Concept IT bel Tounsi'}</strong></span>
+            <span class="truncate">Feynman: <strong class="text-white font-black">${mentor.feynmanTopic || 'Concept IT bel Tounsi'}</strong></span>
             <span class="text-red-500 font-black text-[11px] shrink-0">▶ 16:9 YouTube</span>
           </div>
 
@@ -869,7 +666,7 @@ export function renderProfileView(state = {}) {
         </div>
       ` : ''}
 
-      <!-- CTA Contact Target (Deep-Link Redirect) -->
+      <!-- CTA Contact Target (WhatsApp Deep-Link Redirect) -->
       <div id="action-btn-box-${mentor.id}">
         ${renderContactButton(mentor, isUnlocked)}
       </div>
@@ -889,13 +686,9 @@ export function renderProfileView(state = {}) {
 }
 
 // ============================================================================
-// 7. VIEW 5: DASHBOARD (WORKSPACE WITH PROMINENT '+' CREATOR ENGINE)
+// 6. VIEW 4: DASHBOARD (WORKSPACE WITH PROMINENT '+' CREATOR ENGINE)
 // ============================================================================
 
-/**
- * Dashboard Workspace View
- * Features prominent visual '+' (Plus) button opening the Social Creator Engine modal sheet.
- */
 export function renderDashboardView(state = {}) {
   const user = state.userSession || state.activeUser;
   const watchedCount = state.watchedVideos instanceof Set 
@@ -913,23 +706,22 @@ export function renderDashboardView(state = {}) {
           <h2 class="text-base font-black text-zinc-900 dark:text-white">
             Espace Compte Mentorini
           </h2>
-          <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-[260px] mx-auto">
-            Connecti fil compte mte3ek bech t-partagi l-knowledge w tchouf les mentors.
+          <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-[280px] mx-auto">
+            Dkhol bel Google mte3ek bech t-partagi l-knowledge w t-gérer l-statut mte3ek.
           </p>
           <div class="mt-4 flex flex-col gap-2">
             <button 
               type="button" 
-              onclick="MentoriniActions.setTab('signin')" 
-              class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition-all cursor-pointer"
+              onclick="MentoriniActions.signInWithGoogle()" 
+              class="w-full py-3 rounded-xl bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-black text-xs border border-zinc-300 dark:border-zinc-700 shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
-              Sign In (Dkhol b noumrouk) →
-            </button>
-            <button 
-              type="button" 
-              onclick="MentoriniActions.setTab('signup')" 
-              class="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-bold text-xs transition-all cursor-pointer"
-            >
-              Mazelt ma 3andekch compte? Sajjel houni (2 champs)
+              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span>💬 Edkhel bel Google mte3ek →</span>
             </button>
           </div>
         </div>
@@ -966,10 +758,10 @@ export function renderDashboardView(state = {}) {
                 ${user.name}
               </h2>
               <p class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                ${user.role === 'mentor' ? '🛠️ Peer Mentor IT' : '🎓 Mentee Active'}
+                ${user.role === 'mentor' ? '🛠️ Peer Mentor IT' : '🎓 Active Peer'}
               </p>
-              <p class="text-[11px] text-zinc-400 mt-0.5">
-                📞 ${user.phone || 'Non renseigné'}
+              <p class="text-[11px] text-zinc-400 mt-0.5 truncate max-w-[180px]">
+                ${user.email || user.phone || 'Compte Google vérifié'}
               </p>
             </div>
           </div>
@@ -988,7 +780,7 @@ export function renderDashboardView(state = {}) {
         <div class="relative z-10 space-y-3">
           <div class="flex items-center justify-between">
             <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-mono font-bold tracking-wide">
-              <span>✨ Social Creator Engine</span>
+              <span>✨ Peer Creator Engine</span>
             </span>
             <span class="text-xs font-black text-indigo-200">16:9 Video + Bio</span>
           </div>
@@ -998,7 +790,7 @@ export function renderDashboardView(state = {}) {
               Abda share el knowledge mte3ek
             </h3>
             <p class="text-xs text-indigo-100 leading-relaxed mt-1">
-              Partagi l'expertise mte3ek m3a wled w bnet bledna: 7ot des liens Drive/GitHub w video YouTube 16:9 bel Tounsi.
+              Baddel statut mte3ek men viewer l-creator w 3awen wled bledna: 7ot des liens Drive/GitHub w video YouTube 16:9 bel Tounsi.
             </p>
           </div>
 
@@ -1029,25 +821,12 @@ export function renderDashboardView(state = {}) {
         </div>
       </div>
 
-      <!-- Floating Action Button (FAB) inside Dashboard Workspace -->
-      <div class="pt-2 flex justify-end">
-        <button 
-          type="button" 
-          onclick="MentoriniActions.openShareModal()"
-          title="Abda share el knowledge mte3ek (+)"
-          class="inline-flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black text-xs shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20"
-        >
-          <span class="text-base font-black">＋</span>
-          <span>Partagi Knowledge Jdid</span>
-        </button>
-      </div>
-
     </section>
   `;
 }
 
 // ============================================================================
-// 8. VIEW 6: IDEA / VALUE MANIFESTO VIEW
+// 7. VIEW 5: IDEA / VALUE MANIFESTO VIEW
 // ============================================================================
 
 export function renderIdeaView(state = {}) {
@@ -1064,7 +843,7 @@ export function renderIdeaView(state = {}) {
           <span class="text-indigo-400">Wa9tek w l'Energie mte3ek.</span>
         </h1>
         <p class="text-xs text-zinc-300 leading-relaxed">
-          Fi 3oudh ma tdhi3 fi b7ar YouTube mta3 50 sa3a w forums 9dom, Mentorini ygroupilik peer mentors mfiltrin b clique wa7da.
+          Saving your Time and Energy by grouping filtered peer mentors in one click instead of searching the endless sea of YouTube.
         </p>
       </div>
 
@@ -1077,7 +856,7 @@ export function renderIdeaView(state = {}) {
             <h3 class="font-black text-zinc-900 dark:text-white">1. Feynman Technique bel Tounsi</h3>
           </div>
           <p class="text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            A7san tari9a bech tet3alem concept s3ib (Algo, Recursion, Pointers, OOP) hiya ki yfasserhoulek chkoun 9riblek fel 3mor w bel lahja mte3na.
+            A7san tari9a bech tet3alem concept s3ib (Algo, Recursion, Pointers, OOP) hiya ki yfasserhoulek chkoun 9riblek fel 3mor w bel lahja mte3na fi video 16:9 9sir.
           </p>
         </div>
 
@@ -1094,10 +873,10 @@ export function renderIdeaView(state = {}) {
         <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-base">🚀</span>
-            <h3 class="font-black text-zinc-900 dark:text-white">3. Zero-Cost Social Learning</h3>
+            <h3 class="font-black text-zinc-900 dark:text-white">3. Instagram Equality Model</h3>
           </div>
           <p class="text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Blech flous ($0), blech plateformes m3a9da. Direct peer-to-peer connection bin wled w bnet tounes.
+            Kol 3abd dkhal b compte Google ynajem ykoun mentee wa9t ma y7eb, w ynajem ykoun creator wa9t ma y7eb bel bouton (+). Direct peer-to-peer connection blech flous ($0).
           </p>
         </div>
 
@@ -1108,14 +887,16 @@ export function renderIdeaView(state = {}) {
 }
 
 // ============================================================================
-// 9. THE SOCIAL CREATOR ENGINE MODAL SHEET
+// 8. THE PEER CREATOR ENGINE MODAL SHEET (SLIDES UP FROM BOTTOM)
 // ============================================================================
 
 /**
- * Modal Sheet: "Abda share el knowledge mte3ek"
- * Simple 2-field creator form:
- * 1. Bio text block (write details, Drive/GitHub links)
- * 2. 16:9 YouTube embed link
+ * Slide-up Modal Sheet: "Abda share el knowledge mte3ek"
+ * Form fields:
+ * 1. Standard Bio text block (for description text and pasting Drive/GitHub URLs)
+ * 2. Text area / input for an English Horizontal Aspect-Ratio (16:9) YouTube embed player url
+ * 3. Optional WhatsApp number for direct peer reachouts
+ * Submitting this fires a public patch query to the database.
  */
 export function renderShareKnowledgeModal(state = {}) {
   const user = state.userSession || state.activeUser;
@@ -1126,7 +907,7 @@ export function renderShareKnowledgeModal(state = {}) {
       id="share-knowledge-modal" 
       class="${isHidden ? 'hidden' : ''} fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity"
     >
-      <div class="w-full max-w-[480px] bg-white dark:bg-zinc-900 rounded-t-[28px] sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+      <div class="w-full max-w-[480px] bg-white dark:bg-zinc-900 rounded-t-[28px] sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto animate-slideUp">
         
         <!-- Modal Header -->
         <div class="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
@@ -1136,7 +917,7 @@ export function renderShareKnowledgeModal(state = {}) {
               <span>Abda share el knowledge mte3ek</span>
             </h2>
             <p class="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Partagi m3a jme3et el IT w Bac Info bel lahja mte3na 🇹🇳
+              Baddel statut mte3ek men viewer l-creator w 3awen wled bledna 🇹🇳
             </p>
           </div>
           <button 
@@ -1151,10 +932,10 @@ export function renderShareKnowledgeModal(state = {}) {
         <!-- Feedback Banner -->
         <div id="share-feedback" class="hidden"></div>
 
-        <!-- Form: Exactly 2 simple fields -->
+        <!-- Form: Bio Text Block + 16:9 YouTube URL -->
         <form onsubmit="MentoriniActions.handleShareKnowledge(event)" class="space-y-3.5 text-xs">
           
-          <!-- Field 1: Bio & Resources Text Block -->
+          <!-- Field 1: Standard Bio & Resources Text Block -->
           <div>
             <label class="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
               Bio & Resources (Drive / GitHub / Notion) <span class="text-red-500">*</span>
@@ -1186,7 +967,25 @@ export function renderShareKnowledgeModal(state = {}) {
               class="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <p class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">
-              Format 16:9 horizontal — Feynman concept video bel Tounsi. Tnajjem tzidou tawa wala ba3d.
+              Format 16:9 horizontal — Feynman concept video bel Tounsi.
+            </p>
+          </div>
+
+          <!-- Optional Field: WhatsApp number for direct peer questions -->
+          <div>
+            <label class="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+              Noumrou WhatsApp (Pour contact direct mentee) 💬
+            </label>
+            <input 
+              id="share-phone-input"
+              type="tel" 
+              name="phone" 
+              value="${user && user.phone ? user.phone : ''}"
+              placeholder="Ex: 98123456 (Optionnel)"
+              class="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">
+              Yet-unlooka bil Video-Watch Lock ken ba3d ma yetfarjoo fil video.
             </p>
           </div>
 
@@ -1201,9 +1000,10 @@ export function renderShareKnowledgeModal(state = {}) {
             </button>
             <button 
               type="submit" 
-              class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black shadow-md transition-all active:scale-95 cursor-pointer"
+              class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              Partagi el Knowledge mte3ek 🚀
+              <span>🚀</span>
+              <span>Partagi el Knowledge mte3ek</span>
             </button>
           </div>
 
@@ -1215,17 +1015,15 @@ export function renderShareKnowledgeModal(state = {}) {
 }
 
 // ============================================================================
-// 10. ACTIVE VIEW RESOLVER & NAVIGATION SYNC
+// 9. ACTIVE VIEW RESOLVER & NAVIGATION SYNC
 // ============================================================================
 
 export function renderActiveView(state = {}) {
   const currentTab = state.tabRouter || 'feed';
   let viewHtml = '';
 
-  if (currentTab === 'signup') {
+  if (currentTab === 'signup' || currentTab === 'signin') {
     viewHtml = renderSignUpView(state);
-  } else if (currentTab === 'signin') {
-    viewHtml = renderSignInView(state);
   } else if (currentTab === 'profile') {
     viewHtml = renderProfileView(state);
   } else if (currentTab === 'dashboard') {
@@ -1236,9 +1034,24 @@ export function renderActiveView(state = {}) {
     viewHtml = renderUniversalFeed(state);
   }
 
-  // Append the Social Creator Engine modal sheet so it's always available
+  // Persistent floating '+' Action button pinned cleanly in the workspace toolbar context
+  const persistentPlusButton = `
+    <button 
+      type="button" 
+      id="persistent-floating-plus"
+      onclick="MentoriniActions.openShareModal()"
+      title="Abda share el knowledge mte3ek (+)"
+      style="bottom: calc(76px + env(safe-area-inset-bottom))"
+      class="fixed z-40 right-5 w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-95 text-white flex items-center justify-center font-black text-2xl shadow-xl border-2 border-white/30 hover:shadow-indigo-500/40 transition-transform cursor-pointer"
+    >
+      ＋
+    </button>
+  `;
+
+  // Append the Social Creator Engine modal sheet and persistent floating '+' button
   return `
     ${viewHtml}
+    ${persistentPlusButton}
     ${renderShareKnowledgeModal(state)}
   `;
 }
@@ -1259,7 +1072,7 @@ export function updateNavButtons(currentTab) {
 }
 
 // ============================================================================
-// 11. MOUNTING & LIFECYCLE CONTROLLER
+// 10. MOUNTING & LIFECYCLE CONTROLLER
 // ============================================================================
 
 export function mountApp(targetElement = '#app-viewport', store = AppStore) {
