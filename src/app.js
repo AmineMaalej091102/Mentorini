@@ -343,16 +343,13 @@ export const AppStore = new CentralAppStore();
  */
 export async function loginWithGoogle() {
   AppStore.setState({ isLoading: true, error: null });
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
   try {
-    const redirectUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
-
-    const { data, error } = await client.auth.signInWithOAuth({
-      provider: "google",
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
       options: {
-        redirectTo: redirectUrl,
-      },
+        redirectTo: window.location.origin // 🟢 This forces it to loop back to your Vercel link!
+      }
     });
 
     if (error) throw error;
