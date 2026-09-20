@@ -6,6 +6,11 @@
   --color-indigoNeon: #6366f1;
 }
 
+/* Mobile Hardware Navigation Safe Area Overrides */
+#app-navigation {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
 /* Custom scrollbar hiding utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

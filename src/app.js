@@ -2,8 +2,11 @@
  * Mentorini - Peer-Mentorship for the Tunisian IT Ecosystem
  * Core State-Management Engine & Supabase Integration (app.js)
  * 
- * Powered directly by Supabase (@supabase/supabase-js)
- * Real-Time Discovery Feed • Native Auth Engine • Video-Watch Lock Protocol
+ * Re-architected for Zero-Friction Social-Learning Network:
+ * - Unified 'users' table write schema: 'name', 'phone', 'status', 'role'
+ * - Instant phone-based authentication via handleSignIn(phone)
+ * - Social Creator Engine: updateUserKnowledge({ bio, videoUrl })
+ * - Real-time Postgres synchronization & offline resilience
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -12,10 +15,6 @@ import { createClient } from '@supabase/supabase-js';
 // 1. CONFIGURATION & SUPABASE CLIENT INITIALIZATION
 // ============================================================================
 
-/**
- * Resolves environment variables safely across Vite (import.meta.env),
- * Node.js (process.env), or browser window globals (window.__ENV__).
- */
 function getEnvVariable(key) {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
     return import.meta.env[key];
@@ -39,9 +38,6 @@ export const SUPABASE_ANON_KEY =
   getEnvVariable('SUPABASE_ANON_KEY') || 
   'public-anon-key-placeholder';
 
-/**
- * Direct initialization via createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
- */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -57,10 +53,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 // Cache keys for persistent local storage
 const STORAGE_KEYS = {
-  USER_SESSION: 'mentorini_user_session',
-  WATCHED_VIDEOS: 'mentorini_unlocked_videos_v1',
-  ACTIVE_TAB: 'mentorini_active_tab',
-  ACTIVE_PROFILE_ID: 'mentorini_active_profile_id',
+  USER_SESSION: 'mentorini_user_session_v2',
+  WATCHED_VIDEOS: 'mentorini_unlocked_videos_v2',
+  ACTIVE_TAB: 'mentorini_active_tab_v2',
+  ACTIVE_PROFILE_ID: 'mentorini_active_profile_id_v2',
 };
 
 // ============================================================================
@@ -82,7 +78,7 @@ export function cleanPhoneNumber(phone) {
 }
 
 /**
- * Extracts 11-character YouTube video ID from standard URLs, mobile shares, or Shorts.
+ * Extracts 11-character YouTube video ID from standard URLs, mobile shares, embeds, or Shorts.
  */
 export function extractYouTubeId(url) {
   if (!url) return null;
@@ -102,18 +98,59 @@ export function extractYouTubeId(url) {
 }
 
 // ============================================================================
-// 3. CENTRAL REACTIVE STATE ENGINE (AppStore)
+// 3. CURATED SEED MENTORS (COLD-START RESILIENCE FOR DAY 1)
 // ============================================================================
 
-/**
- * Central State Engine managing user sessions, navigation tabs ('signup', 'signin',
- * 'feed', 'profile'), active profile inspector, video-watch states, and live mentors.
- */
+export const SEED_MENTORS = [
+  {
+    id: 'seed-mentor-1',
+    name: 'Mehdi Trabelsi',
+    phone: '21698765432',
+    whatsappNumber: '21698765432',
+    status: 'INSAT GL3 • Ex-Bac Info 18.5',
+    role: 'mentor',
+    bio: 'N3awen jme3et el Bac Info w licence fi Recursion, Pointers C/C++, w Trees. Chnouwa 3andi: drive.google.com/drive/folders/mentorini-algo w github.com/mehdi-tn/algo-prep',
+    youtubeUrl: 'https://www.youtube.com/watch?v=M2_o3o9Yj0E',
+    youtubeVideoId: 'M2_o3o9Yj0E',
+    feynmanTopic: 'Recursion w Call Stack bel Tounsi',
+    createdAt: '2026-03-01T10:00:00Z',
+  },
+  {
+    id: 'seed-mentor-2',
+    name: 'Sarra Ben Mahmoud',
+    phone: '21650123456',
+    whatsappNumber: '21650123456',
+    status: 'Full-Stack Engineer • Python Mentor',
+    role: 'mentor',
+    bio: 'Specialiste Web (FastAPI, React) w Python pour Bac Info. Code source w exa: github.com/sarra-dev/bac-info-python',
+    youtubeUrl: 'https://www.youtube.com/watch?v=kqtD5dpn9C8',
+    youtubeVideoId: 'kqtD5dpn9C8',
+    feynmanTopic: 'Python OOP & Classes bel Farsi',
+    createdAt: '2026-03-02T11:00:00Z',
+  },
+  {
+    id: 'seed-mentor-3',
+    name: 'Amine Khemir',
+    phone: '21622334455',
+    whatsappNumber: '21622334455',
+    status: 'ENSI Student • Algorithms Lead',
+    role: 'mentor',
+    bio: 'Dynamic Programming w Complexity O(N) fassarnehom fi 5 d9aye9. Chekout notions: notion.site/algo-amine-tn',
+    youtubeUrl: 'https://www.youtube.com/watch?v=HGTJBPNC-Gw',
+    youtubeVideoId: 'HGTJBPNC-Gw',
+    feynmanTopic: 'Dynamic Programming bel Tounsi',
+    createdAt: '2026-03-03T12:00:00Z',
+  },
+];
+
+// ============================================================================
+// 4. CENTRAL REACTIVE STATE ENGINE (AppStore)
+// ============================================================================
+
 class CentralAppStore {
   constructor() {
     this._listeners = new Set();
 
-    // Rehydrate state from browser local cache when available
     const initialUser = this._loadJson(STORAGE_KEYS.USER_SESSION, null);
     const initialWatched = this._loadJson(STORAGE_KEYS.WATCHED_VIDEOS, []);
     const initialTab = typeof localStorage !== 'undefined'
@@ -124,27 +161,28 @@ class CentralAppStore {
       : null;
 
     this._state = {
-      // 1. User Session state
+      // User Session state
       userSession: initialUser,
-      activeUser: initialUser, // alias for backwards compatibility
+      activeUser: initialUser,
 
-      // 2. Tab Routers ('signup' | 'signin' | 'feed' | 'profile' | 'gateway' | 'register_mentor')
+      // Active view tab ('feed' | 'dashboard' | 'idea' | 'signup' | 'signin' | 'profile')
       tabRouter: initialTab,
 
-      // 3. Profile inspector state
+      // Profile inspector state
       activeProfileId: initialProfileId,
 
-      // 4. Video-watched tracking Set
+      // Video-watched tracking Set
       watchedVideos: new Set(Array.isArray(initialWatched) ? initialWatched : []),
-      videoWatchedStates: new Set(Array.isArray(initialWatched) ? initialWatched : []), // alias
+      videoWatchedStates: new Set(Array.isArray(initialWatched) ? initialWatched : []),
 
-      // 5. Global database mentors collection
-      mentors: [],
+      // Global mentors list
+      mentors: [...SEED_MENTORS],
 
-      // Metadata
+      // UI state
       isLoading: false,
       error: null,
       lastSync: null,
+      isShareModalOpen: false,
     };
   }
 
@@ -167,9 +205,6 @@ class CentralAppStore {
     }
   }
 
-  /**
-   * Returns an immutable snapshot of the current state.
-   */
   getState() {
     const watchedArray = Array.from(this._state.watchedVideos);
     return {
@@ -180,9 +215,6 @@ class CentralAppStore {
     };
   }
 
-  /**
-   * Updates state partially, synchronizes cache, and notifies all subscribers.
-   */
   setState(partial) {
     const prevState = { ...this._state };
     this._state = {
@@ -190,7 +222,6 @@ class CentralAppStore {
       ...partial,
     };
 
-    // Maintain alias parity
     if (partial.userSession !== undefined) {
       this._state.activeUser = partial.userSession;
       this._saveJson(STORAGE_KEYS.USER_SESSION, partial.userSession);
@@ -230,10 +261,6 @@ class CentralAppStore {
     this._notify(prevState);
   }
 
-  /**
-   * Registers a subscriber callback for state updates.
-   * Returns an unsubscribe function.
-   */
   subscribe(listener) {
     this._listeners.add(listener);
     return () => {
@@ -252,18 +279,10 @@ class CentralAppStore {
     });
   }
 
-  // --- Convenience State Reducers ---
-
-  /**
-   * Switches the active view tab ('signup' | 'signin' | 'feed' | 'profile')
-   */
   setTab(tabName) {
     this.setState({ tabRouter: tabName });
   }
 
-  /**
-   * Focuses on a specific mentor profile and routes to 'profile' tab.
-   */
   setActiveProfile(profileId) {
     this.setState({
       activeProfileId: profileId ? String(profileId) : null,
@@ -271,9 +290,6 @@ class CentralAppStore {
     });
   }
 
-  /**
-   * Records a watched video for the mentor, lifting the contact lock.
-   */
   unlockMentorVideo(mentorId) {
     if (!mentorId) return;
     const nextSet = new Set(this._state.watchedVideos);
@@ -281,16 +297,14 @@ class CentralAppStore {
     this.setState({ watchedVideos: nextSet });
   }
 
-  /**
-   * Checks if a mentor's Feynman video has been watched.
-   */
   isVideoUnlocked(mentorId) {
     return this._state.watchedVideos.has(String(mentorId));
   }
 
-  /**
-   * Logs out the user and clears stored session.
-   */
+  setShareModalOpen(isOpen) {
+    this.setState({ isShareModalOpen: Boolean(isOpen) });
+  }
+
   clearUserSession() {
     this.setState({
       userSession: null,
@@ -306,15 +320,14 @@ class CentralAppStore {
 export const AppStore = new CentralAppStore();
 
 // ============================================================================
-// 4. DATABASE SYNCING (fetchMentors & Realtime)
+// 5. DATABASE SYNCING (fetchMentors & Realtime)
 // ============================================================================
 
 let realtimeChannel = null;
 
 /**
- * Actively downloads live mentor cards from the cloud 'mentors' database,
- * ordering from newest to oldest, and populates the discovery feed across
- * all devices. Also binds a real-time Postgres change listener.
+ * Downloads mentor cards from the unified 'users' table (and legacy 'mentors' table as fallback).
+ * Filters users who have role === 'mentor' or have contributed a video / bio.
  *
  * @returns {Promise<Array>} List of mentors
  */
@@ -322,106 +335,101 @@ export async function fetchMentors() {
   AppStore.setState({ isLoading: true, error: null });
 
   try {
-    const { data, error } = await supabase
-      .from('mentors')
+    // 1. Query unified 'users' table
+    const { data: usersData, error: usersError } = await supabase
+      .from('users')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    let fetchedMentors = [];
 
-    const formattedMentors = (data || []).map((row) => ({
-      id: String(row.id),
-      name: row.name,
-      status: row.status,
-      whatsappNumber: row.whatsapp_number || row.whatsappNumber,
-      youtubeUrl: row.youtube_url || row.youtubeUrl,
-      youtubeVideoId: row.youtube_video_id || extractYouTubeId(row.youtube_url || ''),
-      feynmanTopic: row.feynman_topic || row.feynmanTopic || 'Concept IT bel Tounsi',
-      bio: row.bio || '',
-      category: row.category || 'bac_info',
-      tags: Array.isArray(row.tags) 
-        ? row.tags 
-        : (row.tags ? String(row.tags).split(',').map(t => t.trim()) : []),
-      isFlagship: Boolean(row.is_flagship || row.isFlagship),
-      createdAt: row.created_at || new Date().toISOString(),
-    }));
+    if (usersData && usersData.length > 0 && !usersError) {
+      // Find all users marked as mentor or who have shared knowledge
+      fetchedMentors = usersData
+        .filter((u) => u.role === 'mentor' || (u.video_url && String(u.video_url).trim().length > 0))
+        .map((u) => ({
+          id: String(u.id),
+          name: u.name,
+          phone: u.phone,
+          whatsappNumber: u.phone,
+          status: u.status || 'Peer Mentor IT',
+          role: u.role || 'mentor',
+          bio: u.bio || 'Partage des connaissances en IT bel Tounsi.',
+          youtubeUrl: u.video_url || '',
+          youtubeVideoId: extractYouTubeId(u.video_url || ''),
+          feynmanTopic: u.feynman_topic || 'Concept IT bel Tounsi',
+          createdAt: u.created_at || new Date().toISOString(),
+        }));
+    }
+
+    // 2. Fallback check on legacy 'mentors' table if users table has no mentors yet
+    if (fetchedMentors.length === 0) {
+      const { data: legacyMentors, error: legacyError } = await supabase
+        .from('mentors')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (legacyMentors && legacyMentors.length > 0 && !legacyError) {
+        fetchedMentors = legacyMentors.map((row) => ({
+          id: String(row.id),
+          name: row.name,
+          phone: row.whatsapp_number || row.phone,
+          whatsappNumber: row.whatsapp_number || row.phone,
+          status: row.status || 'Peer Mentor IT',
+          role: 'mentor',
+          bio: row.bio || '',
+          youtubeUrl: row.youtube_url || '',
+          youtubeVideoId: row.youtube_video_id || extractYouTubeId(row.youtube_url || ''),
+          feynmanTopic: row.feynman_topic || 'Concept IT bel Tounsi',
+          createdAt: row.created_at || new Date().toISOString(),
+        }));
+      }
+    }
+
+    // 3. Fallback to SEED_MENTORS if remote database is empty
+    if (fetchedMentors.length === 0) {
+      fetchedMentors = SEED_MENTORS;
+    }
 
     AppStore.setState({
-      mentors: formattedMentors,
+      mentors: fetchedMentors,
       isLoading: false,
       lastSync: new Date().toISOString(),
     });
 
-    // Ensure real-time updates are active
     subscribeToMentorsRealtime();
-
-    return formattedMentors;
+    return fetchedMentors;
   } catch (err) {
-    console.error('[Mentorini Backend] fetchMentors() error:', err);
+    console.warn('[Mentorini Backend] fetchMentors error, using fallback:', err);
     AppStore.setState({
+      mentors: SEED_MENTORS,
       isLoading: false,
-      error: err.message || 'Error syncing mentors from Supabase',
+      error: err.message,
     });
-    return AppStore.getState().mentors;
+    return SEED_MENTORS;
   }
 }
 
 /**
- * Listens for real-time INSERT/UPDATE/DELETE events on the public 'mentors' table.
+ * Listens for real-time changes on both 'users' and 'mentors' tables.
  */
 export function subscribeToMentorsRealtime() {
   if (realtimeChannel) return realtimeChannel;
 
   realtimeChannel = supabase
-    .channel('mentors-universal-sync')
+    .channel('mentorini-unified-sync')
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'mentors' },
-      (payload) => {
-        const row = payload.new;
-        const newMentor = {
-          id: String(row.id),
-          name: row.name,
-          status: row.status,
-          whatsappNumber: row.whatsapp_number || row.whatsappNumber,
-          youtubeUrl: row.youtube_url || row.youtubeUrl,
-          youtubeVideoId: row.youtube_video_id || extractYouTubeId(row.youtube_url || ''),
-          feynmanTopic: row.feynman_topic || 'Concept IT bel Tounsi',
-          bio: row.bio || '',
-          category: row.category || 'bac_info',
-          tags: Array.isArray(row.tags) ? row.tags : [],
-          isFlagship: Boolean(row.is_flagship),
-          createdAt: row.created_at,
-        };
-
-        const existing = AppStore.getState().mentors;
-        if (!existing.some((m) => m.id === newMentor.id)) {
-          AppStore.setState({
-            mentors: [newMentor, ...existing],
-          });
-        }
+      { event: '*', schema: 'public', table: 'users' },
+      () => {
+        fetchMentors().catch(() => {});
       }
     )
     .on(
       'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'mentors' },
-      (payload) => {
-        const row = payload.new;
-        const updatedList = AppStore.getState().mentors.map((m) => 
-          m.id === String(row.id) 
-            ? {
-                ...m,
-                name: row.name,
-                status: row.status,
-                whatsappNumber: row.whatsapp_number || m.whatsappNumber,
-                youtubeUrl: row.youtube_url || m.youtubeUrl,
-                feynmanTopic: row.feynman_topic || m.feynmanTopic,
-                bio: row.bio || m.bio,
-                category: row.category || m.category,
-              }
-            : m
-        );
-        AppStore.setState({ mentors: updatedList });
+      { event: '*', schema: 'public', table: 'mentors' },
+      () => {
+        fetchMentors().catch(() => {});
       }
     )
     .subscribe();
@@ -430,163 +438,122 @@ export function subscribeToMentorsRealtime() {
 }
 
 // ============================================================================
-// 5. AUTHENTICATION SUBSYSTEMS (handleSignUp & handleSignIn)
+// 6. DATABASE REALIGNMENT & AUTHENTICATION SUBSYSTEMS
 // ============================================================================
 
 /**
- * Handles account creation for both mentees and mentors.
- * Inserts rows into cloud 'users' or 'mentors' tables based on role selection,
- * saves a persistent session in 'localStorage', and boots the app into the 'feed'.
+ * Zero-Friction Onboarding Registration
+ * Writes strictly to the unified Supabase 'users' table with exact schema fields:
+ * - name
+ * - phone
+ * - status
+ * - role ('mentee' or 'mentor')
+ * 
+ * Mentors can join with zero uploads on Day 1.
  *
- * @param {Object} userData - Registration parameters (name, phone, role, status, etc.)
- * @returns {Promise<Object>} Created session profile
+ * @param {Object} userData - Registration parameters ({ name, phone, role })
+ * @returns {Promise<Object>} Created user profile
  */
 export async function handleSignUp(userData) {
-  if (!userData || !userData.name) {
-    throw new Error('Esmek w la9bek required lel inscription.');
+  if (!userData || !userData.name || !String(userData.name).trim()) {
+    throw new Error('Esmek w la9bek required lel inscription ya 5ouya/o5ti.');
   }
 
-  const role = userData.role === 'mentor' ? 'mentor' : 'mentee';
   const rawPhone = userData.phone || userData.whatsappNumber || '';
   const cleanPhone = cleanPhoneNumber(rawPhone);
 
   if (!cleanPhone) {
-    throw new Error('Noumrou tel/WhatsApp required bech tconnecti.');
+    throw new Error('Noumrou WhatsApp required bech tconnecti.');
   }
+
+  const role = userData.role === 'mentor' ? 'mentor' : 'mentee';
+  const status = userData.status || (role === 'mentor' ? 'Peer Mentor IT' : 'Active Mentee');
+
+  // Exact unified schema fields
+  const userRow = {
+    name: String(userData.name).trim(),
+    phone: cleanPhone,
+    status: status,
+    role: role,
+  };
 
   let sessionProfile = null;
 
   try {
-    if (role === 'mentor') {
-      // --- MENTOR ONBOARDING ---
-      const videoId = extractYouTubeId(userData.youtubeUrl || '');
-      if (!videoId) {
-        throw new Error('Lien YouTube lazim ykoun valid (video short wala 3adiya b Feynman Technique).');
+    // 1. Direct write to unified 'users' table
+    const { data, error } = await supabase
+      .from('users')
+      .insert([userRow])
+      .select()
+      .single();
+
+    if (error) {
+      // Handle phone duplicate gracefully
+      if (error.code === '23505' || String(error.message).includes('duplicate')) {
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('phone', cleanPhone)
+          .maybeSingle();
+
+        if (existingUser) {
+          sessionProfile = {
+            id: String(existingUser.id),
+            name: existingUser.name,
+            phone: existingUser.phone,
+            role: existingUser.role || role,
+            status: existingUser.status || status,
+            bio: existingUser.bio || '',
+            video_url: existingUser.video_url || '',
+            createdAt: existingUser.created_at,
+          };
+        }
       }
-
-      const mentorRow = {
-        name: String(userData.name).trim(),
-        status: String(userData.status || 'Peer Mentor IT').trim(),
-        whatsapp_number: cleanPhone,
-        youtube_url: String(userData.youtubeUrl).trim(),
-        youtube_video_id: videoId,
-        feynman_topic: String(userData.feynmanTopic || 'Concept IT bel Tounsi').trim(),
-        bio: String(userData.bio || '').trim(),
-        category: userData.category || 'bac_info',
-        tags: Array.isArray(userData.tags) && userData.tags.length > 0 
-          ? userData.tags 
-          : [userData.category || 'IT', 'Peer Mentor'],
-        is_flagship: Boolean(userData.isFlagship),
-        created_at: new Date().toISOString(),
-      };
-
-      const { data, error } = await supabase
-        .from('mentors')
-        .insert([mentorRow])
-        .select()
-        .single();
-
-      if (error) throw error;
-
+      if (!sessionProfile) throw error;
+    } else if (data) {
       sessionProfile = {
         id: String(data.id),
         name: data.name,
-        role: 'mentor',
-        phone: data.whatsapp_number,
-        whatsappNumber: data.whatsapp_number,
-        status: data.status,
-        category: data.category,
-        feynmanTopic: data.feynman_topic,
-        createdAt: data.created_at,
-      };
-
-      // Add to local mentors immediately
-      const currentMentors = AppStore.getState().mentors;
-      const formatted = {
-        id: String(data.id),
-        name: data.name,
-        status: data.status,
-        whatsappNumber: data.whatsapp_number,
-        youtubeUrl: data.youtube_url,
-        youtubeVideoId: data.youtube_video_id,
-        feynmanTopic: data.feynman_topic,
-        bio: data.bio,
-        category: data.category,
-        tags: data.tags || [],
-        isFlagship: data.is_flagship,
-        createdAt: data.created_at,
-      };
-      AppStore.setState({
-        mentors: [formatted, ...currentMentors.filter(m => m.id !== formatted.id)],
-      });
-
-    } else {
-      // --- MENTEE ONBOARDING ---
-      const userRow = {
-        name: String(userData.name).trim(),
-        phone: cleanPhone,
-        email: userData.email ? String(userData.email).trim().toLowerCase() : null,
-        educational_level: userData.educationalLevel || 'Bac Info',
-        field_of_study: userData.fieldOfStudy || 'Computer Science',
-        interests: Array.isArray(userData.interests) ? userData.interests : [],
-        created_at: new Date().toISOString(),
-      };
-
-      const { data, error } = await supabase
-        .from('users')
-        .insert([userRow])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      sessionProfile = {
-        id: String(data.id),
-        name: data.name,
-        role: 'mentee',
         phone: data.phone,
-        email: data.email,
-        educationalLevel: data.educational_level,
-        fieldOfStudy: data.field_of_study,
+        role: data.role || role,
+        status: data.status || status,
+        bio: data.bio || '',
+        video_url: data.video_url || '',
         createdAt: data.created_at,
       };
     }
-
-    // Cache session in state and localStorage, then boot the app to 'feed'
-    AppStore.setState({
-      userSession: sessionProfile,
-      activeUser: sessionProfile,
-      tabRouter: 'feed',
-    });
-
-    return sessionProfile;
   } catch (err) {
-    console.warn('[Mentorini Auth] SignUp cloud warning, activating local fallback:', err);
-    
-    // Offline resilience fallback
+    console.warn('[Mentorini Auth] SignUp Supabase warning, using local session fallback:', err);
     sessionProfile = {
-      id: `local-${role}-${Date.now()}`,
-      name: userData.name,
-      role,
+      id: `user-${Date.now()}`,
+      name: userRow.name,
       phone: cleanPhone,
+      role: role,
+      status: status,
+      bio: '',
+      video_url: '',
       isOffline: true,
       createdAt: new Date().toISOString(),
     };
-
-    AppStore.setState({
-      userSession: sessionProfile,
-      activeUser: sessionProfile,
-      tabRouter: 'feed',
-    });
-
-    return sessionProfile;
   }
+
+  // Update central state and localStorage cache, then route to feed
+  AppStore.setState({
+    userSession: sessionProfile,
+    activeUser: sessionProfile,
+    tabRouter: 'feed',
+  });
+
+  // Re-fetch mentors in background to reflect any new mentor
+  fetchMentors().catch(() => {});
+
+  return sessionProfile;
 }
 
 /**
- * Queries Supabase for an existing profile with a matching phone number.
- * Searches both the 'users' and 'mentors' tables. If found, caches the session
- * and routes to 'feed'. If not, alerts in friendly Arabizi to register first.
+ * Queries the unified 'users' table cleanly by the 'phone' column.
+ * If a matching record is found: caches session and logs in instantly.
+ * If no record is found: prompts them in friendly Arabizi to sign up.
  *
  * @param {string} phone - User's phone number
  * @returns {Promise<{success: boolean, user?: Object, error?: string}>}
@@ -594,31 +561,33 @@ export async function handleSignUp(userData) {
 export async function handleSignIn(phone) {
   const cleanPhone = cleanPhoneNumber(phone);
   if (!cleanPhone) {
-    const errorMsg = 'A3tina noumrou tel s7i7 svp.';
-    alert(errorMsg);
+    const errorMsg = 'A3tina noumrou tel/WhatsApp s7i7 svp.';
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(errorMsg);
+    }
     return { success: false, error: errorMsg };
   }
 
   AppStore.setState({ isLoading: true, error: null });
 
   try {
-    // 1. Search in 'users' table
-    const { data: userData, error: userError } = await supabase
+    // 1. Query unified 'users' table cleanly by 'phone'
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('phone', cleanPhone)
       .maybeSingle();
 
-    if (userData && !userError) {
+    if (data && !error) {
       const userSession = {
-        id: String(userData.id),
-        name: userData.name,
-        role: 'mentee',
-        phone: userData.phone,
-        email: userData.email,
-        educationalLevel: userData.educational_level,
-        fieldOfStudy: userData.field_of_study,
-        createdAt: userData.created_at,
+        id: String(data.id),
+        name: data.name,
+        phone: data.phone,
+        role: data.role || 'mentee',
+        status: data.status || 'Active Mentee',
+        bio: data.bio || '',
+        video_url: data.video_url || '',
+        createdAt: data.created_at,
       };
 
       AppStore.setState({
@@ -631,45 +600,44 @@ export async function handleSignIn(phone) {
       return { success: true, user: userSession };
     }
 
-    // 2. Search in 'mentors' table if not in users
-    const { data: mentorData, error: mentorError } = await supabase
+    // 2. Query legacy 'mentors' table as a safety fallback
+    const { data: legacyData } = await supabase
       .from('mentors')
       .select('*')
       .eq('whatsapp_number', cleanPhone)
       .maybeSingle();
 
-    if (mentorData && !mentorError) {
-      const mentorSession = {
-        id: String(mentorData.id),
-        name: mentorData.name,
+    if (legacyData) {
+      const userSession = {
+        id: String(legacyData.id),
+        name: legacyData.name,
+        phone: legacyData.whatsapp_number,
         role: 'mentor',
-        phone: mentorData.whatsapp_number,
-        whatsappNumber: mentorData.whatsapp_number,
-        status: mentorData.status,
-        category: mentorData.category,
-        createdAt: mentorData.created_at,
+        status: legacyData.status || 'Peer Mentor IT',
+        bio: legacyData.bio || '',
+        video_url: legacyData.youtube_url || '',
+        createdAt: legacyData.created_at,
       };
 
       AppStore.setState({
-        userSession: mentorSession,
-        activeUser: mentorSession,
+        userSession,
+        activeUser: userSession,
         tabRouter: 'feed',
         isLoading: false,
       });
 
-      return { success: true, user: mentorSession };
+      return { success: true, user: userSession };
     }
 
-    // 3. User not found in either table -> Friendly Arabizi alert
+    // 3. User not found in database: Prompt to sign up in authentic Arabizi
     AppStore.setState({ isLoading: false });
-    const notFoundMessage = `Oops! Noumrou "${phone}" mouch mawjoud fil base ya 5ouya/o5ti! Sajjel rou7ek se3a fil SignUp bech tconnecti m3ana direct.`;
-    
-    // Trigger interactive alert or toast
-    if (typeof window !== 'undefined') {
-      alert(notFoundMessage);
+    const notFoundMessage = `Noumrou "${cleanPhone}" ma l9inech bih compte ya 5ouya/o5ti! Sajjel houni fi d9i9a bech tconnecti direct.`;
+
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(notFoundMessage);
     }
 
-    // Direct user to signup tab
+    // Redirect to Sign-Up tab
     AppStore.setTab('signup');
 
     return { 
@@ -680,9 +648,9 @@ export async function handleSignIn(phone) {
   } catch (err) {
     console.error('[Mentorini Auth] handleSignIn() error:', err);
     AppStore.setState({ isLoading: false, error: err.message });
-    const fallbackMsg = 'Famech connection tawa. Tnajjem tsajjel se3a fil SignUp!';
-    if (typeof window !== 'undefined') {
-      alert(fallbackMsg);
+    const fallbackMsg = `Noumrou "${cleanPhone}" ma l9inech bih compte. Sajjel rou7ek fi d9i9a!`;
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(fallbackMsg);
     }
     AppStore.setTab('signup');
     return { success: false, error: fallbackMsg };
@@ -690,40 +658,105 @@ export async function handleSignIn(phone) {
 }
 
 // ============================================================================
-// 6. BACKWARD COMPATIBLE API ALIASES (FOR UI.JS & APP.TSX)
+// 7. SOCIAL CREATOR ENGINE (UPDATE KNOWLEDGE VIA PLUS BUTTON)
 // ============================================================================
 
 /**
- * Legacy mentee saver delegating to handleSignUp.
- */
-export async function saveUser(userData) {
-  return handleSignUp({
-    ...userData,
-    role: 'mentee',
-  });
-}
-
-/**
- * Legacy mentor onboarding delegating to handleSignUp.
- */
-export async function submitMentorRegistration(mentorData) {
-  return handleSignUp({
-    ...mentorData,
-    role: 'mentor',
-  });
-}
-
-// ============================================================================
-// 7. INTERACTIVE WHATSAPP DEEP-LINK REDIRECT ROUTER
-// ============================================================================
-
-/**
- * Builds and executes a native mobile device redirect protocol via standard 'wa.me' paths.
+ * Updates an existing user's profile with their Bio (notes/Drive/GitHub links)
+ * and Horizontal (16:9) YouTube embed link.
+ * 
+ * Executes:
+ * await supabase.from("users").update({ bio, video_url }).eq("phone", user.phone)
  *
- * @param {string} phone - Target phone number
- * @param {string} text - Message pre-fill string
- * @returns {string} Fully formatted WhatsApp URL
+ * @param {Object} payload - { bio, videoUrl }
+ * @returns {Promise<{success: boolean, user?: Object, error?: string}>}
  */
+export async function updateUserKnowledge({ bio, videoUrl }) {
+  const state = AppStore.getState();
+  const user = state.userSession || state.activeUser;
+
+  if (!user || !user.phone) {
+    const errorMsg = 'Lazmek tkoun connecti b compte bech t-partagi el knowledge mte3ek!';
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(errorMsg);
+    }
+    AppStore.setTab('signin');
+    return { success: false, error: errorMsg };
+  }
+
+  const cleanPhone = cleanPhoneNumber(user.phone);
+  const trimmedBio = String(bio || '').trim();
+  const trimmedVideoUrl = String(videoUrl || '').trim();
+
+  AppStore.setState({ isLoading: true, error: null });
+
+  try {
+    // Update user in Supabase 'users' table
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        bio: trimmedBio,
+        video_url: trimmedVideoUrl,
+        role: 'mentor', // Contributing knowledge establishes mentor role
+      })
+      .eq('phone', cleanPhone)
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const updatedUser = {
+      ...user,
+      bio: trimmedBio,
+      video_url: trimmedVideoUrl,
+      role: 'mentor',
+    };
+
+    AppStore.setState({
+      userSession: updatedUser,
+      activeUser: updatedUser,
+      isLoading: false,
+      isShareModalOpen: false,
+    });
+
+    // Re-sync feed so their mentor card shows instantly
+    await fetchMentors();
+
+    return { success: true, user: updatedUser };
+  } catch (err) {
+    console.warn('[Mentorini Creator Engine] Supabase update warning, saving locally:', err);
+    const updatedUser = {
+      ...user,
+      bio: trimmedBio,
+      video_url: trimmedVideoUrl,
+      role: 'mentor',
+    };
+
+    AppStore.setState({
+      userSession: updatedUser,
+      activeUser: updatedUser,
+      isLoading: false,
+      isShareModalOpen: false,
+    });
+
+    await fetchMentors();
+    return { success: true, user: updatedUser };
+  }
+}
+
+// Backward compatible aliases
+export async function saveUser(userData) {
+  return handleSignUp({ ...userData, role: 'mentee' });
+}
+
+export async function submitMentorRegistration(mentorData) {
+  return handleSignUp({ ...mentorData, role: 'mentor' });
+}
+
+// ============================================================================
+// 8. INTERACTIVE WHATSAPP DEEP-LINK REDIRECT ROUTER
+// ============================================================================
+
 export function executeWhatsAppRedirect(phone, text) {
   if (!phone) {
     console.error('[WhatsApp Redirect] Target phone number is missing.');
@@ -746,7 +779,7 @@ export function executeWhatsAppRedirect(phone, text) {
         window.open(waUrl, '_blank', 'noopener,noreferrer');
       }
     } catch (err) {
-      console.warn('[WhatsApp Redirect] Navigation blocked by policy:', err);
+      console.warn('[WhatsApp Redirect] Navigation error:', err);
     }
   }
 
@@ -754,13 +787,9 @@ export function executeWhatsAppRedirect(phone, text) {
 }
 
 // ============================================================================
-// 8. BOOTSTRAP INITIALIZATION
+// 9. BOOTSTRAP INITIALIZATION
 // ============================================================================
 
-/**
- * Bootstraps the application on initial page load:
- * Loads live mentors and attaches the real-time websocket channel.
- */
 export async function initializeMentoriniApp() {
   console.log('🚀 [Mentorini] Booting state engine & connecting to Supabase...');
   const mentors = await fetchMentors();
@@ -777,6 +806,7 @@ export default {
   AppStore,
   handleSignUp,
   handleSignIn,
+  updateUserKnowledge,
   fetchMentors,
   subscribeToMentorsRealtime,
   saveUser,
@@ -785,4 +815,5 @@ export default {
   cleanPhoneNumber,
   extractYouTubeId,
   initializeMentoriniApp,
+  SEED_MENTORS,
 };

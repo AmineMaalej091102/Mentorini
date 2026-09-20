@@ -16,13 +16,21 @@ function App() {
         </header>
 
         {/* 🔄 This is where your ui.js injects your Arabizi Views */}
-        <main id="app-viewport" className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24 space-y-4"></main>
+        <main 
+          id="app-viewport" 
+          style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}
+          className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4"
+        ></main>
 
         {/* Sticky Tabs Navigation */}
-        <nav id="app-navigation" className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-surfaceDark/90 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800/80 px-6 py-3 flex justify-between items-center z-50 md:rounded-b-[28px]">
-            <button onClick={() => (window as any).switchTab?.('feed')} id="nav-feed" className="text-indigoNeon text-xs font-mono font-bold">Feed</button>
-            <button onClick={() => (window as any).switchTab?.('dashboard')} id="nav-dashboard" className="text-gray-400 dark:text-gray-500 text-xs font-mono">Dashboard</button>
-            <button onClick={() => (window as any).switchTab?.('idea')} id="nav-idea" className="text-gray-400 dark:text-gray-500 text-xs font-mono">Idea</button>
+        <nav 
+          id="app-navigation" 
+          style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}
+          className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-surfaceDark/90 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800/80 px-6 pt-3 flex justify-between items-center z-50 md:rounded-b-[28px]"
+        >
+            <button onClick={() => (window as any).switchTab?.('feed')} id="nav-feed" className="text-indigoNeon text-xs font-mono font-bold cursor-pointer">Feed</button>
+            <button onClick={() => (window as any).switchTab?.('dashboard')} id="nav-dashboard" className="text-gray-400 dark:text-gray-500 text-xs font-mono cursor-pointer">Dashboard</button>
+            <button onClick={() => (window as any).switchTab?.('idea')} id="nav-idea" className="text-gray-400 dark:text-gray-500 text-xs font-mono cursor-pointer">Idea</button>
         </nav>
 
       </div>
