@@ -118,7 +118,7 @@ export default function App() {
   const [videoUrlInput, setVideoUrlInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const loadMentors = async () => {
+  const fetchMentors = async () => {
     try {
       const { data, error } = await supabase
         .from('users')
@@ -145,24 +145,17 @@ export default function App() {
     }
   };
 
-  const loadUserProfile = async (userId: string, email?: string) => {
+  const fetchUserProfile = async (userId: string) => {
     try {
-      if (email) {
-        const { data } = await supabase.from('users').select('*').eq('email', email).single();
-        if (data) {
-          setUserProfile(data);
-          setBioInput(data.bio || '');
-          setVideoUrlInput(data.video_url || data.youtube_url || '');
-          return;
-        }
-      }
       const { data } = await supabase.from('users').select('*').eq('id', userId).single();
       if (data) {
         setUserProfile(data);
         setBioInput(data.bio || '');
         setVideoUrlInput(data.video_url || data.youtube_url || '');
       }
-    } catch {}
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
@@ -179,7 +172,7 @@ export default function App() {
         const { data } = await supabase.auth.getSession();
         if (data?.session) {
           setUser(data.session.user);
-          loadUserProfile(data.session.user.id, data.session.user.email);
+          fetchUserProfile(data.session.user.id);
           window.history.replaceState({}, document.title, '/feed');
         }
       }
@@ -187,10 +180,10 @@ export default function App() {
       const { data: initialSessionData } = await supabase.auth.getSession();
       if (initialSessionData?.session?.user) {
         setUser(initialSessionData.session.user);
-        loadUserProfile(initialSessionData.session.user.id, initialSessionData.session.user.email);
+        fetchUserProfile(initialSessionData.session.user.id);
       }
 
-      loadMentors();
+      fetchMentors();
     };
 
     handleAuthInit();
@@ -198,8 +191,8 @@ export default function App() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user);
-        loadUserProfile(session.user.id, session.user.email);
-        loadMentors();
+        fetchUserProfile(session.user.id);
+        fetchMentors();
         if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
           window.history.replaceState({}, document.title, '/feed');
         }
@@ -240,15 +233,16 @@ export default function App() {
     if (!user) return;
     setIsSaving(true);
     try {
-      const payload = { bio: bioInput.trim(), video_url: videoUrlInput.trim() };
-      const { error } = await supabase.from('users').update(payload).eq('id', user.id);
-      if (error) {
-        await supabase.from('users').update(payload).eq('email', user.email);
-      }
-      await loadUserProfile(user.id, user.email);
-      await loadMentors();
+      const bio = bioInput.trim();
+      const videoUrl = videoUrlInput.trim();
+
+      await supabase.from('users').update({ bio, video_url: videoUrl }).eq('id', user.id);
+
+      await fetchUserProfile(user.id);
+      await fetchMentors();
+
       setIsModalOpen(false);
-      setActiveTab('profile');
+      setActiveTab('feed');
     } catch (err) {
       console.error(err);
     } finally {
@@ -260,49 +254,49 @@ export default function App() {
 
   if (!user && !hasAccessToken) {
     return (
-      <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-950 font-sans">
-        <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col justify-between p-6 md:rounded-[32px] md:border border-zinc-200 dark:border-zinc-800">
+      <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-[#090D1A] font-sans">
+        <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-zinc-900 shadow-2xl overflow-hidden flex flex-col justify-between p-6 md:rounded-[32px] md:border border-zinc-800">
           <div className="flex items-center gap-2 pt-2">
-            <span className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
-              mentorini<span className="text-indigo-600">.</span>
+            <span className="text-2xl font-black tracking-tight text-white">
+              mentorini<span className="text-indigo-500">.</span>
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-950/70 text-emerald-400 text-[10px] font-bold">
               Zero-Fee IT 🇹🇳
             </span>
           </div>
 
           <div className="my-auto py-4 space-y-4">
-            <div className="bg-gradient-to-b from-indigo-50/90 via-white to-zinc-50 dark:from-indigo-950/30 dark:via-zinc-900 dark:to-zinc-900 border border-indigo-100 dark:border-indigo-900/40 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-800">
+            <div className="bg-gradient-to-b from-indigo-950/30 via-zinc-900 to-zinc-900 border border-indigo-900/40 rounded-3xl p-6 shadow-sm space-y-4">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-900/60 text-indigo-300 text-xs font-bold border border-indigo-800">
                 <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                 <span>Peer-Mentorship fi Tounes</span>
               </div>
 
-              <h1 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 leading-[1.25]">
+              <h1 className="text-2xl font-black tracking-tight text-zinc-50 leading-[1.25]">
                 Erba7 a3az zouz 7weyej 3andek: <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">
                   Wa9tek w l&apos;Energie mte3ek.
                 </span>
               </h1>
 
-              <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">
-                Fi 3oudh ma tdhi3 fi <strong className="text-zinc-900 dark:text-zinc-100 font-bold">b7ar YouTube</strong> mta3 50 sa3a w forums 9dom w ma ta3rafch chkoun tsada9, l9inalek <span className="underline decoration-indigo-400 decoration-2 font-bold text-zinc-900 dark:text-zinc-100">peer mentors mfiltrin b clique wa7da</span>.
+              <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+                Fi 3oudh ma tdhi3 fi <strong className="text-zinc-100 font-bold">b7ar YouTube</strong> mta3 50 sa3a w forums 9dom w ma ta3rafch chkoun tsada9, l9inalek <span className="underline decoration-indigo-400 decoration-2 font-bold text-zinc-100">peer mentors mfiltrin b clique wa7da</span>.
               </p>
 
               <div className="space-y-2.5 pt-1">
-                <div className="flex items-start gap-2.5 text-xs text-zinc-800 dark:text-zinc-200">
+                <div className="flex items-start gap-2.5 text-xs text-zinc-200">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <span><strong className="text-zinc-900 dark:text-white font-bold">Feynman Technique:</strong> Kol mentor yfassar concept fi video 9sira bel Tounsi mte3na.</span>
+                  <span><strong className="text-white font-bold">Feynman Technique:</strong> Kol mentor yfassar concept fi video 9sira bel Tounsi mte3na.</span>
                 </div>
 
-                <div className="flex items-start gap-2.5 text-xs text-zinc-800 dark:text-zinc-200">
+                <div className="flex items-start gap-2.5 text-xs text-zinc-200">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <span><strong className="text-zinc-900 dark:text-white font-bold">Zero-Lock Discovery:</strong> Tfarrej direct f l-video 16:9 fi wost el feed blech ta39id.</span>
+                  <span><strong className="text-white font-bold">Zero-Lock Discovery:</strong> Tfarrej direct f l-video 16:9 fi wost el feed blech ta39id.</span>
                 </div>
 
-                <div className="flex items-start gap-2.5 text-xs text-zinc-800 dark:text-zinc-200">
+                <div className="flex items-start gap-2.5 text-xs text-zinc-200">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <span><strong className="text-zinc-900 dark:text-white font-bold">100% Free & Direct:</strong> Zero intermediation ($0). Deep-link direct lel WhatsApp mta3 l-mentor.</span>
+                  <span><strong className="text-white font-bold">100% Free & Direct:</strong> Zero intermediation ($0). Deep-link direct lel WhatsApp mta3 l-mentor.</span>
                 </div>
               </div>
             </div>
@@ -311,7 +305,7 @@ export default function App() {
           <div className="space-y-3 pb-2">
             <button
               onClick={loginWithGoogle}
-              className="w-full flex items-center justify-center gap-3 bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-black text-sm py-4 px-4 rounded-2xl shadow-xl transition-all active:scale-[0.98] cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 bg-white hover:bg-zinc-100 text-zinc-900 font-black text-sm py-4 px-4 rounded-2xl shadow-xl transition-all active:scale-[0.98] cursor-pointer"
             >
               <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                 <path
@@ -345,17 +339,16 @@ export default function App() {
   const userFirstInitial = (user?.user_metadata?.full_name || 'A').trim().charAt(0).toUpperCase() || 'A';
   const userFullName = user?.user_metadata?.full_name || 'Peer Member';
   const userEmail = user?.email || '';
-  const userVideoId = extractYouTubeId(userProfile?.video_url);
 
   return (
-    <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-950 font-sans">
-      <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col md:rounded-[32px] md:border border-zinc-200 dark:border-zinc-800">
-        <header className="w-full bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 p-3.5 flex justify-between items-center sticky top-0 z-40">
+    <div className="flex justify-center items-center min-h-screen antialiased text-zinc-100 bg-[#090D1A] font-sans">
+      <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-zinc-900 shadow-2xl overflow-hidden flex flex-col md:rounded-[32px] md:border border-zinc-800">
+        <header className="w-full bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800 p-3.5 flex justify-between items-center sticky top-0 z-40">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('feed')}>
-            <span className="text-xl font-black tracking-tight text-zinc-900 dark:text-white">
-              mentorini<span className="text-indigo-600">.</span>
+            <span className="text-xl font-black tracking-tight text-white">
+              mentorini<span className="text-indigo-500">.</span>
             </span>
-            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+            <span className="px-1.5 py-0.5 rounded-full bg-emerald-950/70 text-emerald-400 text-[10px] font-bold">
               100% Free 🇹🇳
             </span>
           </div>
@@ -363,7 +356,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleLogout}
-              className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
+              className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
               title="Khrouj"
             >
               <LogOut className="w-4 h-4" />
@@ -390,20 +383,20 @@ export default function App() {
                 return (
                   <article
                     key={mentor.id}
-                    className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm"
+                    className="bg-zinc-850 bg-zinc-800/80 border border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm"
                   >
                     <div className="p-3.5 pb-2.5 flex items-center justify-between">
                       <div>
-                        <h3 className="font-black text-xs text-zinc-900 dark:text-zinc-50">
+                        <h3 className="font-black text-xs text-zinc-50">
                           {mentor.name}
                         </h3>
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                        <p className="text-[11px] text-zinc-400 truncate">
                           {mentor.status || 'Peer Mentor IT'}
                         </p>
                       </div>
                       <button
                         onClick={() => openWhatsAppChat(mentor.phone, mentor.name)}
-                        className="flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-sm transition-all"
+                        className="flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-sm transition-all cursor-pointer"
                       >
                         <MessageCircle className="w-3 h-3" />
                         <span>WhatsApp</span>
@@ -412,7 +405,7 @@ export default function App() {
 
                     <div className="px-3.5 pb-3">
                       {videoId ? (
-                        <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
+                        <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-700 shadow-inner">
                           {isPlaying ? (
                             <iframe
                               src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
@@ -443,7 +436,7 @@ export default function App() {
                     </div>
 
                     {mentor.bio && (
-                      <div className="px-3.5 pb-3 text-xs text-zinc-600 dark:text-zinc-300">
+                      <div className="px-3.5 pb-3 text-xs text-zinc-300">
                         {renderBioWithChips(mentor.bio)}
                       </div>
                     )}
@@ -452,36 +445,19 @@ export default function App() {
               })}
             </div>
           ) : (
-            <div className="p-6 flex flex-col items-center text-center space-y-4">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-4xl shadow-xl border-4 border-white dark:border-zinc-800">
+            <div className="p-8 flex flex-col items-center text-center space-y-4">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-4xl shadow-xl border-4 border-zinc-800">
                 {userFirstInitial}
               </div>
 
               <div className="space-y-1">
-                <h2 className="text-xl font-black text-zinc-900 dark:text-white">
+                <h2 className="text-xl font-black text-white">
                   {userFullName}
                 </h2>
-                <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                <p className="text-sm font-semibold text-zinc-400">
                   {userEmail}
                 </p>
               </div>
-
-              {userVideoId && (
-                <div className="w-full aspect-video rounded-xl overflow-hidden bg-black mt-4 shadow-inner">
-                  <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(userVideoId)}?rel=0`}
-                    title="User Video"
-                    className="w-full h-full border-0"
-                    allowFullScreen
-                  />
-                </div>
-              )}
-
-              {userProfile?.bio && (
-                <div className="w-full text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-800/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-left mt-2">
-                  {renderBioWithChips(userProfile.bio)}
-                </div>
-              )}
             </div>
           )}
         </main>
@@ -490,15 +466,15 @@ export default function App() {
           <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div
               style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}
-              className="w-full max-w-[480px] bg-white dark:bg-zinc-900 rounded-t-[32px] sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl p-5 space-y-4"
+              className="w-full max-w-[480px] bg-zinc-900 rounded-t-[32px] sm:rounded-2xl border-t sm:border border-zinc-800 shadow-2xl p-5 space-y-4"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-                <h2 className="text-sm font-black text-zinc-900 dark:text-white">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                <h2 className="text-sm font-black text-white">
                   Partagi el knowledge mte3ek
                 </h2>
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 flex items-center justify-center text-xs"
+                  className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center text-xs hover:text-white cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -506,7 +482,7 @@ export default function App() {
 
               <form onSubmit={handleSaveContent} className="space-y-3 text-xs">
                 <div>
-                  <label className="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+                  <label className="block font-bold text-zinc-200 mb-1">
                     Bio & Liens (GitHub, Drive, Notion)
                   </label>
                   <textarea
@@ -514,12 +490,12 @@ export default function App() {
                     value={bioInput}
                     onChange={(e) => setBioInput(e.target.value)}
                     placeholder="Chnowa tnajjem t3awen w les liens mte3ek..."
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+                  <label className="block font-bold text-zinc-200 mb-1">
                     Lien YouTube 16:9
                   </label>
                   <input
@@ -527,7 +503,7 @@ export default function App() {
                     value={videoUrlInput}
                     onChange={(e) => setVideoUrlInput(e.target.value)}
                     placeholder="https://www.youtube.com/watch?v=..."
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>
 
@@ -535,14 +511,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold"
+                    className="px-3.5 py-2 rounded-xl border border-zinc-700 text-zinc-300 font-bold hover:bg-zinc-800 cursor-pointer"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow disabled:opacity-50 cursor-pointer"
                   >
                     {isSaving ? 'Syncing...' : 'Enregistrer'}
                   </button>
@@ -554,15 +530,15 @@ export default function App() {
 
         <nav
           style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
-          className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800/80 px-8 pt-3 flex justify-between items-center z-40 md:rounded-b-[28px]"
+          className="absolute bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-800/80 px-8 pt-3 flex justify-between items-center z-40 md:rounded-b-[28px]"
         >
           <button
             onClick={() => setActiveTab('feed')}
             aria-label="Home Feed"
             className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
               activeTab === 'feed'
-                ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 scale-105'
-                : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                ? 'text-indigo-400 bg-indigo-950/60 scale-105'
+                : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
             <Home className="w-5 h-5" />
@@ -571,7 +547,7 @@ export default function App() {
           <button
             onClick={() => setIsModalOpen(true)}
             aria-label="Add Content"
-            className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white dark:border-zinc-900"
+            className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-zinc-900"
           >
             <Plus className="w-5 h-5 stroke-[2.5]" />
           </button>
@@ -581,7 +557,7 @@ export default function App() {
             aria-label="My Profile"
             className={`p-1.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
               activeTab === 'profile'
-                ? 'ring-2 ring-indigo-600 dark:ring-indigo-400 scale-105'
+                ? 'ring-2 ring-indigo-400 scale-105'
                 : 'opacity-75 hover:opacity-100'
             }`}
           >
