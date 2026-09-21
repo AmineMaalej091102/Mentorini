@@ -125,7 +125,7 @@ export default function App() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [bioInput, setBioInput] = useState('');
-  const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [videoInput, setVideoInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const fetchMentors = async () => {
@@ -133,7 +133,10 @@ export default function App() {
       const { data, error } = await supabase
         .from('users')
         .select('*')
+        .neq('video_url', '')
+        .not('video_url', 'is', null)
         .order('created_at', { ascending: false });
+
       if (data && data.length > 0 && !error) {
         setMentors(
           data.map((u: any) => ({
@@ -161,7 +164,7 @@ export default function App() {
       if (data) {
         setUserProfile(data);
         setBioInput(data.bio || '');
-        setVideoUrlInput(data.video_url || data.youtube_url || '');
+        setVideoInput(data.video_url || data.youtube_url || '');
       }
     } catch (err) {
       console.error(err);
@@ -245,7 +248,7 @@ export default function App() {
     try {
       await supabase
         .from('users')
-        .update({ bio: bioInput, video_url: videoUrlInput })
+        .update({ bio: bioInput, video_url: videoInput, role: 'mentor' })
         .eq('id', user.id);
 
       await fetchUserProfile(user.id);
@@ -529,8 +532,8 @@ export default function App() {
                   </label>
                   <input
                     type="url"
-                    value={videoUrlInput}
-                    onChange={(e) => setVideoUrlInput(e.target.value)}
+                    value={videoInput}
+                    onChange={(e) => setVideoInput(e.target.value)}
                     placeholder="https://www.youtube.com/watch?v=..."
                     className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
