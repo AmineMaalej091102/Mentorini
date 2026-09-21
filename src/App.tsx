@@ -134,7 +134,7 @@ export default function App() {
             name: u.name || u.user_metadata?.full_name || 'Peer Mentor',
             email: u.email || '',
             phone: u.phone || u.whatsapp_number || '',
-            status: u.status || 'Peer Mentor IT',
+            status: u.status || 'Student',
             bio: u.bio || '',
             video_url: u.video_url || u.youtube_url || '',
             category: u.category || 'IT_PEER',
@@ -236,10 +236,12 @@ export default function App() {
     if (!user) return;
     setIsSaving(true);
     try {
-      await supabase
-        .from('users')
-        .update({ bio: bioInput, video_url: videoUrlInput })
-        .eq('id', user.id);
+      await supabase.from('users').update({
+        bio: bioInput,
+        video_url: videoUrlInput,
+        status: 'Student',
+        role: 'mentor',
+      }).eq('id', user.id);
 
       await fetchUserProfile(user.id);
       await fetchMentors();
@@ -398,7 +400,7 @@ export default function App() {
                           {mentor.name}
                         </h3>
                         <p className="text-[11px] text-zinc-400 truncate">
-                          {mentor.status || 'Peer Mentor IT'}
+                          {mentor.status || 'Student'}
                         </p>
                       </div>
                       <button
