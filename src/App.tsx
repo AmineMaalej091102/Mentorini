@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
-  Compass,
+  Home,
   Plus,
   Play,
   ArrowLeft,
@@ -203,7 +203,7 @@ export default function App() {
         email: email || '',
         name: metadata?.full_name || metadata?.name || email?.split('@')[0] || 'Peer User',
         avatar_url: metadata?.avatar_url || metadata?.picture || '',
-        status: 'Peer Member IT',
+        status: '✨ Peer Member',
         role: 'member',
         bio: '',
         video_url: '',
@@ -220,7 +220,7 @@ export default function App() {
         email: email || '',
         name: metadata?.full_name || 'Peer User',
         avatar_url: metadata?.avatar_url || metadata?.picture || '',
-        status: 'Peer Member IT',
+        status: '✨ Peer Member',
         role: 'member',
         bio: '',
         video_url: '',
@@ -397,9 +397,10 @@ export default function App() {
   };
 
   const userDisplayName = user?.user_metadata?.full_name || 'Peer User';
-  const userDisplayEmail = user?.email;
-  const userAvatarUrl = user?.user_metadata?.avatar_url;
+  const userDisplayEmail = user?.email || '';
   const userFirstInitial = user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A';
+  const activeVideoUrl = profileState?.video_url || profileState?.youtube_url;
+  const activeVideoId = extractYouTubeId(activeVideoUrl);
 
   if (user || window.location.pathname === '/feed' || window.location.hash.includes('access_token')) {
     return (
@@ -422,18 +423,9 @@ export default function App() {
               onClick={() => navigate('profile')}
               className="flex items-center gap-2 cursor-pointer"
             >
-              {userAvatarUrl ? (
-                <img
-                  src={userAvatarUrl}
-                  alt="Google Profile"
-                  referrerPolicy="no-referrer"
-                  className="w-8 h-8 rounded-full object-cover border border-indigo-500 shadow-sm"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                  {userFirstInitial}
-                </div>
-              )}
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                {userFirstInitial}
+              </div>
             </div>
           </header>
 
@@ -628,73 +620,78 @@ export default function App() {
               </section>
             ) : (
               <section className="space-y-4">
-                <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-4 shadow-sm space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      {userAvatarUrl ? (
-                        <img
-                          src={userAvatarUrl}
-                          alt="Google Profile"
-                          referrerPolicy="no-referrer"
-                          className="w-12 h-12 rounded-2xl object-cover shadow-md border border-indigo-500"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-lg shadow-md">
-                          {userFirstInitial}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <h2 className="text-sm font-black text-zinc-900 dark:text-white truncate">
-                          {userDisplayName}
-                        </h2>
-                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">
-                          {userDisplayEmail}
-                        </p>
-                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-3 h-3" /> Compte Google Vérifié
-                        </span>
-                      </div>
-                    </div>
-
+                <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-5 shadow-sm space-y-5">
+                  <div className="flex flex-col items-center text-center space-y-2 relative pt-2">
                     <button
                       onClick={handleSignOut}
-                      className="px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer flex items-center gap-1"
+                      className="absolute right-0 top-0 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer flex items-center gap-1"
                     >
                       <LogOut className="w-3 h-3" />
                       <span>Khrouj</span>
                     </button>
+
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-3xl shadow-xl border-2 border-white dark:border-zinc-700">
+                      {userFirstInitial}
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <h2 className="text-base font-black text-zinc-900 dark:text-white">
+                        {userDisplayName}
+                      </h2>
+                      <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                        {userDisplayEmail}
+                      </p>
+                      <div className="pt-1">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 text-[11px] font-bold border border-indigo-100 dark:border-indigo-900">
+                          ✨ Peer Member
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  {extractYouTubeId(profileState?.video_url || profileState?.youtube_url) ? (
-                    <div className="space-y-2">
-                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                         Video 16:9 Mte3ek
                       </h3>
+                      <button
+                        onClick={handleOpenCreatorModal}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        Baddel ✎
+                      </button>
+                    </div>
+
+                    {activeVideoId ? (
                       <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
                         <iframe
                           src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
-                            extractYouTubeId(profileState?.video_url || profileState?.youtube_url)!
+                            activeVideoId
                           )}?rel=0`}
                           title="My Video Preview"
                           className="w-full h-full border-0"
                           allowFullScreen
                         />
                       </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-dashed border-zinc-300 dark:border-zinc-700 text-center space-y-1">
-                      <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                        Ma zelt ma 7attitech video 16:9!
-                      </p>
-                      <p className="text-[11px] text-zinc-500">
-                        Enzel 3la [+] l-louta bech tzid lien YouTube w t-partagi l-knowledge.
-                      </p>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="p-6 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-dashed border-zinc-300 dark:border-zinc-700 text-center space-y-2">
+                        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 leading-relaxed">
+                          Mazel ma 3andekch videos houni. Anzel 3la el button [+] fil navigation bar bech tcharrek el knowledge mte3ek tawa!
+                        </p>
+                        <button
+                          onClick={handleOpenCreatorModal}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Zid video tawa</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-1">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                         Bio & Liens mte3ek
                       </h3>
                       <button
@@ -704,7 +701,7 @@ export default function App() {
                         Baddel ✎
                       </button>
                     </div>
-                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
                       {profileState?.bio ? (
                         renderBioWithChips(profileState.bio)
                       ) : (
@@ -836,15 +833,15 @@ export default function App() {
           >
             <button
               onClick={() => navigate('feed')}
-              id="nav-explore-feed"
-              aria-label="Explore Feed"
+              id="nav-home-feed"
+              aria-label="Home Feed"
               className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
                 currentPath === 'feed' && !selectedMentor
                   ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 scale-105'
                   : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
               }`}
             >
-              <Compass className="w-5 h-5" />
+              <Home className="w-5 h-5" />
             </button>
 
             <button
@@ -866,18 +863,9 @@ export default function App() {
                   : 'opacity-75 hover:opacity-100'
               }`}
             >
-              {userAvatarUrl ? (
-                <img
-                  src={userAvatarUrl}
-                  alt="Google Profile"
-                  referrerPolicy="no-referrer"
-                  className="w-7 h-7 rounded-full object-cover border border-zinc-200 dark:border-zinc-700"
-                />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs">
-                  {userFirstInitial}
-                </div>
-              )}
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                {userFirstInitial}
+              </div>
             </button>
           </nav>
         </div>
