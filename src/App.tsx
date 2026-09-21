@@ -338,20 +338,23 @@ export default function App() {
     }
   }, [currentPath, user, fetchMentorsCatalog, hydrateUserProfile]);
 
-  const handleGoogleLogin = async () => {
+  const loginWithGoogle = async () => {
     setFeedback({ type: 'info', message: 'Connexion bel Google direct...' });
     try {
+      const targetRedirect = `${window.location.origin}/feed`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { 
-          redirectTo: `${window.location.origin}/feed`,
-        },
+        options: {
+          redirectTo: targetRedirect
+        }
       });
       if (error) throw error;
     } catch (err: any) {
       setFeedback({ type: 'error', message: `Erreur: ${err?.message || 'Connexion impossible'}` });
     }
   };
+
+  const handleGoogleLogin = loginWithGoogle;
 
   const handleSignOut = async () => {
     try {
