@@ -1,9 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-midnight: #090d16;
+  --color-midnight: #090d1a;
   --color-surfaceDark: #111827;
   --color-indigoNeon: #6366f1;
+}
+
+html,
+body,
+#root {
+  background-color: #090d1a !important;
+  color-scheme: dark;
+  min-height: 100%;
+  overscroll-behavior-y: none;
 }
 
 /* Mobile Hardware Navigation Safe Area Overrides */
