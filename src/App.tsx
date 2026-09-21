@@ -243,11 +243,10 @@ export default function App() {
     if (!user) return;
     setIsSaving(true);
     try {
-      const bio = bioInput.trim();
-      const extractedVideoId = extractId(videoUrlInput.trim());
-      const finalEmbedUrl = `https://youtube.com/embed/${extractedVideoId}`;
-
-      await supabase.from('users').update({ bio, video_url: finalEmbedUrl }).eq('id', user.id);
+      await supabase
+        .from('users')
+        .update({ bio: bioInput, video_url: videoUrlInput })
+        .eq('id', user.id);
 
       await fetchUserProfile(user.id);
       await fetchMentors();
