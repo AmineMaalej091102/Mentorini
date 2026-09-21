@@ -166,27 +166,33 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadMentors();
-
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user) {
-        setUser(data.session.user);
-        loadUserProfile(data.session.user.id, data.session.user.email);
-        if (window.location.hash.includes('access_token')) {
+    const handleAuthInit = async () => {
+      if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          setUser(data.session.user);
+          loadUserProfile(data.session.user.id, data.session.user.email);
           window.history.replaceState({}, document.title, '/feed');
         }
       }
+
+      const { data: initialSessionData } = await supabase.auth.getSession();
+      if (initialSessionData?.session?.user) {
+        setUser(initialSessionData.session.user);
+        loadUserProfile(initialSessionData.session.user.id, initialSessionData.session.user.email);
+      }
+
+      loadMentors();
     };
 
-    checkSession();
+    handleAuthInit();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user);
         loadUserProfile(session.user.id, session.user.email);
         loadMentors();
-        if (window.location.hash.includes('access_token')) {
+        if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
           window.history.replaceState({}, document.title, '/feed');
         }
       } else {
@@ -242,7 +248,9 @@ export default function App() {
     }
   };
 
-  if (!user) {
+  const hasAccessToken = typeof window !== 'undefined' && window.location.hash.includes('access_token');
+
+  if (!user && !hasAccessToken) {
     return (
       <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-950 font-sans">
         <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col justify-between p-6 md:rounded-[32px] md:border border-zinc-200 dark:border-zinc-800">
@@ -326,9 +334,9 @@ export default function App() {
     );
   }
 
-  const userFirstInitial = (user.user_metadata?.full_name || 'A').trim().charAt(0).toUpperCase() || 'A';
-  const userFullName = user.user_metadata?.full_name || 'Peer Member';
-  const userEmail = user.email || '';
+  const userFirstInitial = (user?.user_metadata?.full_name || 'A').trim().charAt(0).toUpperCase() || 'A';
+  const userFullName = user?.user_metadata?.full_name || 'Peer Member';
+  const userEmail = user?.email || '';
   const userVideoId = extractYouTubeId(userProfile?.video_url);
 
   return (
