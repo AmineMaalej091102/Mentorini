@@ -314,21 +314,54 @@ if (typeof window !== 'undefined') {
   window.renderEngine = window.renderEngine || renderEngine;
 }
 
-// ============================================================================
-// REAL-TIME AUTH OBSERVER (Root-level initialization)
-// Server-side automated Supabase trigger synchronization
-// ============================================================================
 supabase.auth.onAuthStateChange(async (event, session) => {
-  if (session && session.user) {
-    AppStore.state.user = session.user;
-    AppStore.setState({
-      user: session.user,
-      userSession: session.user,
-      activeUser: session.user,
-      tabRouter: 'feed',
-    });
-    await AppStore.fetchMentors();
-    renderEngine();
+  if (session && session.user && session.user.email) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', session.user.email)
+        .single();
+
+      const userRecord = data || {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.user_metadata?.full_name || 'Peer User',
+        role: 'mentee',
+        status: 'Active Member',
+        bio: '',
+        video_url: '',
+      };
+
+      AppStore.state.user = userRecord;
+      AppStore.setState({
+        user: userRecord,
+        userSession: userRecord,
+        activeUser: userRecord,
+        tabRouter: 'feed',
+      });
+      await AppStore.fetchMentors();
+      renderEngine();
+    } catch (err) {
+      const fallbackUser = {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.user_metadata?.full_name || 'Peer User',
+        role: 'mentee',
+        status: 'Active Member',
+        bio: '',
+        video_url: '',
+      };
+      AppStore.state.user = fallbackUser;
+      AppStore.setState({
+        user: fallbackUser,
+        userSession: fallbackUser,
+        activeUser: fallbackUser,
+        tabRouter: 'feed',
+      });
+      await AppStore.fetchMentors();
+      renderEngine();
+    }
   } else if (event === 'SIGNED_OUT') {
     AppStore.clearUserSession();
     renderEngine();
@@ -366,13 +399,37 @@ export async function checkUserSession() {
       return AppStore.getState().user || null;
     }
     const user = data.user;
-    AppStore.state.user = user;
+    let activeProfile = null;
+    try {
+      const { data: matchedRow } = await client
+        .from('users')
+        .select('*')
+        .eq('email', user.email)
+        .single();
+
+      if (matchedRow) {
+        activeProfile = matchedRow;
+      }
+    } catch (e) {
+    }
+
+    if (!activeProfile) {
+      activeProfile = {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || 'Peer User',
+        status: 'Active Member',
+        role: 'mentee',
+      };
+    }
+
+    AppStore.state.user = activeProfile;
     AppStore.setState({
-      user,
-      userSession: user,
-      activeUser: user,
+      user: activeProfile,
+      userSession: activeProfile,
+      activeUser: activeProfile,
     });
-    return user;
+    return activeProfile;
   } catch (err) {
     return AppStore.getState().user || null;
   }
@@ -402,22 +459,13 @@ export async function updateProfileContent(bio, videoUrl) {
   AppStore.setState({ isLoading: true, error: null });
 
   try {
-    let updateQuery = client.from('users').update({
-      bio: trimmedBio,
-      video_url: trimmedVideoUrl,
-      role: 'mentor',
-      status: 'Peer Mentor IT',
-    });
-
-    if (user.id) {
-      updateQuery = updateQuery.eq('id', user.id);
-    } else if (user.phone) {
-      updateQuery = updateQuery.eq('phone', user.phone);
-    } else if (user.email) {
-      updateQuery = updateQuery.eq('email', user.email);
-    }
-
-    await updateQuery;
+    await client
+      .from('users')
+      .update({
+        bio: trimmedBio,
+        video_url: trimmedVideoUrl,
+      })
+      .eq('email', user.email);
 
     const updatedUser = {
       ...user,
@@ -495,9 +543,9 @@ export async function fetchMentors() {
       fetchedMentors = usersData
         .filter((u) => u.role === 'mentor' || (u.video_url && String(u.video_url).trim().length > 0))
         .map((u) => ({
-          id: String(u.id || u.phone || Math.random()),
+          id: String(u.id || u.email || Math.random()),
           name: u.name || u.user_metadata?.full_name || 'Peer Mentor',
-          email: u.email || (String(u.phone).includes('@') ? u.phone : ''),
+          email: u.email || '',
           phone: u.phone || '',
           whatsappNumber: u.whatsapp_number || u.phone || '',
           status: u.status || 'Peer Mentor IT',
