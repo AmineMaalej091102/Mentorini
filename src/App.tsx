@@ -32,7 +32,7 @@ const SEED_MENTORS: MentoriniUser[] = [
     phone: '21698765432',
     status: 'INSAT GL3 • Bac Info 18.5',
     bio: 'N3awen fi Recursion, Pointers C/C++, w Trees: https://github.com/mehdi-tn/algo-prep',
-    video_url: 'https://youtube.com/embed/M2_o3o9Yj0E',
+    video_url: 'https://www.youtube.com/watch?v=M2_o3o9Yj0E',
     category: 'ALGO_BAC',
   },
   {
@@ -42,7 +42,7 @@ const SEED_MENTORS: MentoriniUser[] = [
     phone: '21650123456',
     status: 'Full-Stack Engineer • Python Mentor',
     bio: 'Python Bac Info w FastAPI: https://github.com/sarra-dev/bac-info-python',
-    video_url: 'https://youtube.com/embed/kqtD5dpn9C8',
+    video_url: 'https://www.youtube.com/watch?v=kqtD5dpn9C8',
     category: 'PYTHON_DEV',
   },
   {
@@ -52,25 +52,15 @@ const SEED_MENTORS: MentoriniUser[] = [
     phone: '21622334455',
     status: 'ENSI Student • Algorithms Lead',
     bio: 'Dynamic Programming w Complexity O(N): https://notion.site/algo-amine-tn',
-    video_url: 'https://youtube.com/embed/HGTJBPNC-Gw',
+    video_url: 'https://www.youtube.com/watch?v=HGTJBPNC-Gw',
     category: 'DATA_STRUCTURES',
   },
 ];
 
-const extractId = (url: string): string => {
-  try {
-    const parts = url.split(/(vi\/|v=|\/v\/|youtu\.be\/|\/embed\/)/);
-    return parts[2] !== undefined ? parts[2].split(/[^0-9a-z_-]/i)[0] : url;
-  } catch {
-    return url;
-  }
-};
-
 function extractYouTubeId(url?: string | null): string | null {
   if (!url) return null;
   const trimmed = String(url).trim();
-  const idFromExtractor = extractId(trimmed);
-  if (/^[a-zA-Z0-9_-]{11}$/.test(idFromExtractor)) return idFromExtractor;
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
   const match = trimmed.match(
     /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/
   );
@@ -125,7 +115,7 @@ export default function App() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [bioInput, setBioInput] = useState('');
-  const [videoInput, setVideoInput] = useState('');
+  const [videoUrlInput, setVideoUrlInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const fetchMentors = async () => {
@@ -164,7 +154,7 @@ export default function App() {
       if (data) {
         setUserProfile(data);
         setBioInput(data.bio || '');
-        setVideoInput(data.video_url || data.youtube_url || '');
+        setVideoUrlInput(data.video_url || data.youtube_url || '');
       }
     } catch (err) {
       console.error(err);
@@ -248,12 +238,14 @@ export default function App() {
     try {
       await supabase
         .from('users')
-        .update({ bio: bioInput, video_url: videoInput, role: 'mentor' })
+        .update({ bio: bioInput, video_url: videoUrlInput })
         .eq('id', user.id);
 
       await fetchUserProfile(user.id);
       await fetchMentors();
 
+      setBioInput('');
+      setVideoUrlInput('');
       setIsModalOpen(false);
       setActiveTab('feed');
     } catch (err) {
@@ -484,12 +476,6 @@ export default function App() {
                   />
                 </div>
               ) : null}
-
-              {userProfile?.bio ? (
-                <div className="w-full text-xs text-zinc-300 leading-relaxed bg-zinc-800/60 p-3.5 rounded-xl border border-zinc-700 text-left mt-2">
-                  {renderBioWithChips(userProfile.bio)}
-                </div>
-              ) : null}
             </div>
           )}
         </main>
@@ -505,6 +491,7 @@ export default function App() {
                   Partagi el knowledge mte3ek
                 </h2>
                 <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center text-xs hover:text-white cursor-pointer"
                 >
@@ -531,9 +518,9 @@ export default function App() {
                     Lien YouTube 16:9
                   </label>
                   <input
-                    type="url"
-                    value={videoInput}
-                    onChange={(e) => setVideoInput(e.target.value)}
+                    type="text"
+                    value={videoUrlInput}
+                    onChange={(e) => setVideoUrlInput(e.target.value)}
                     placeholder="https://www.youtube.com/watch?v=..."
                     className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
