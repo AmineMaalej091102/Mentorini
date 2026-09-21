@@ -32,7 +32,7 @@ const SEED_MENTORS: MentoriniUser[] = [
     phone: '21698765432',
     status: 'INSAT GL3 • Bac Info 18.5',
     bio: 'N3awen fi Recursion, Pointers C/C++, w Trees: https://github.com/mehdi-tn/algo-prep',
-    video_url: 'https://www.youtube.com/watch?v=M2_o3o9Yj0E',
+    video_url: 'https://youtube.com/embed/M2_o3o9Yj0E',
     category: 'ALGO_BAC',
   },
   {
@@ -42,7 +42,7 @@ const SEED_MENTORS: MentoriniUser[] = [
     phone: '21650123456',
     status: 'Full-Stack Engineer • Python Mentor',
     bio: 'Python Bac Info w FastAPI: https://github.com/sarra-dev/bac-info-python',
-    video_url: 'https://www.youtube.com/watch?v=kqtD5dpn9C8',
+    video_url: 'https://youtube.com/embed/kqtD5dpn9C8',
     category: 'PYTHON_DEV',
   },
   {
@@ -52,15 +52,25 @@ const SEED_MENTORS: MentoriniUser[] = [
     phone: '21622334455',
     status: 'ENSI Student • Algorithms Lead',
     bio: 'Dynamic Programming w Complexity O(N): https://notion.site/algo-amine-tn',
-    video_url: 'https://www.youtube.com/watch?v=HGTJBPNC-Gw',
+    video_url: 'https://youtube.com/embed/HGTJBPNC-Gw',
     category: 'DATA_STRUCTURES',
   },
 ];
 
+const extractId = (url: string): string => {
+  try {
+    const parts = url.split(/(vi\/|v=|\/v\/|youtu\.be\/|\/embed\/)/);
+    return parts[2] !== undefined ? parts[2].split(/[^0-9a-z_-]/i)[0] : url;
+  } catch {
+    return url;
+  }
+};
+
 function extractYouTubeId(url?: string | null): string | null {
   if (!url) return null;
   const trimmed = String(url).trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  const idFromExtractor = extractId(trimmed);
+  if (/^[a-zA-Z0-9_-]{11}$/.test(idFromExtractor)) return idFromExtractor;
   const match = trimmed.match(
     /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/
   );
@@ -94,7 +104,7 @@ function renderBioWithChips(text?: string) {
               href={part}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded text-[11px] hover:underline mx-0.5"
+              className="inline-flex items-center gap-1 font-bold text-indigo-400 bg-indigo-950/70 border border-indigo-800 px-1.5 py-0.5 rounded text-[11px] hover:underline mx-0.5"
             >
               {label} <ExternalLink className="w-2.5 h-2.5" />
             </a>
@@ -234,9 +244,10 @@ export default function App() {
     setIsSaving(true);
     try {
       const bio = bioInput.trim();
-      const videoUrl = videoUrlInput.trim();
+      const extractedVideoId = extractId(videoUrlInput.trim());
+      const finalEmbedUrl = `https://youtube.com/embed/${extractedVideoId}`;
 
-      await supabase.from('users').update({ bio, video_url: videoUrl }).eq('id', user.id);
+      await supabase.from('users').update({ bio, video_url: finalEmbedUrl }).eq('id', user.id);
 
       await fetchUserProfile(user.id);
       await fetchMentors();
@@ -254,7 +265,7 @@ export default function App() {
 
   if (!user && !hasAccessToken) {
     return (
-      <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-[#090D1A] font-sans">
+      <div className="flex justify-center items-center min-h-screen antialiased text-zinc-100 bg-[#090D1A] font-sans">
         <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-zinc-900 shadow-2xl overflow-hidden flex flex-col justify-between p-6 md:rounded-[32px] md:border border-zinc-800">
           <div className="flex items-center gap-2 pt-2">
             <span className="text-2xl font-black tracking-tight text-white">
@@ -340,6 +351,8 @@ export default function App() {
   const userFullName = user?.user_metadata?.full_name || 'Peer Member';
   const userEmail = user?.email || '';
 
+  const userVideoId = extractYouTubeId(userProfile?.video_url);
+
   return (
     <div className="flex justify-center items-center min-h-screen antialiased text-zinc-100 bg-[#090D1A] font-sans">
       <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-zinc-900 shadow-2xl overflow-hidden flex flex-col md:rounded-[32px] md:border border-zinc-800">
@@ -383,7 +396,7 @@ export default function App() {
                 return (
                   <article
                     key={mentor.id}
-                    className="bg-zinc-850 bg-zinc-800/80 border border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm"
+                    className="bg-zinc-800/80 border border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm"
                   >
                     <div className="p-3.5 pb-2.5 flex items-center justify-between">
                       <div>
@@ -458,6 +471,23 @@ export default function App() {
                   {userEmail}
                 </p>
               </div>
+
+              {userVideoId ? (
+                <div className="w-full aspect-video rounded-xl overflow-hidden bg-black mt-4 shadow-inner">
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(userVideoId)}?rel=0`}
+                    title="User Video"
+                    className="w-full h-full border-0"
+                    allowFullScreen
+                  />
+                </div>
+              ) : null}
+
+              {userProfile?.bio ? (
+                <div className="w-full text-xs text-zinc-300 leading-relaxed bg-zinc-800/60 p-3.5 rounded-xl border border-zinc-700 text-left mt-2">
+                  {renderBioWithChips(userProfile.bio)}
+                </div>
+              ) : null}
             </div>
           )}
         </main>
