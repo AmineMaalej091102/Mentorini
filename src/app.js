@@ -316,59 +316,17 @@ if (typeof window !== 'undefined') {
 
 // ============================================================================
 // REAL-TIME AUTH OBSERVER (Root-level initialization)
+// Server-side automated Supabase trigger synchronization
 // ============================================================================
 supabase.auth.onAuthStateChange(async (event, session) => {
-  if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session && session.user) {
-    const user = session.user;
-    let activeProfile = null;
-
-    try {
-      const { data: matchedRows, error: queryErr } = await supabase
-        .from('users')
-        .select('*')
-        .eq('phone', user.email);
-
-      if (matchedRows && matchedRows.length > 0) {
-        activeProfile = matchedRows[0];
-      } else {
-        const { data: insertedRows, error: insertErr } = await supabase
-          .from('users')
-          .insert([{ 
-            name: user.user_metadata?.full_name || 'Peer User', 
-            phone: user.email, 
-            status: 'Student', 
-            role: 'mentee' 
-          }])
-          .select();
-
-        if (insertedRows && insertedRows.length > 0) {
-          activeProfile = insertedRows[0];
-        } else {
-          activeProfile = {
-            name: user.user_metadata?.full_name || 'Peer User', 
-            phone: user.email, 
-            status: 'Student', 
-            role: 'mentee' 
-          };
-        }
-      }
-    } catch (err) {
-      activeProfile = {
-        name: user.user_metadata?.full_name || 'Peer User', 
-        phone: user.email, 
-        status: 'Student', 
-        role: 'mentee' 
-      };
-    }
-
-    AppStore.state.user = activeProfile;
+  if (session && session.user) {
+    AppStore.state.user = session.user;
     AppStore.setState({
-      user: activeProfile,
-      userSession: activeProfile,
-      activeUser: activeProfile,
+      user: session.user,
+      userSession: session.user,
+      activeUser: session.user,
       tabRouter: 'feed',
     });
-
     await AppStore.fetchMentors();
     renderEngine();
   } else if (event === 'SIGNED_OUT') {
@@ -408,36 +366,13 @@ export async function checkUserSession() {
       return AppStore.getState().user || null;
     }
     const user = data.user;
-    let activeProfile = null;
-    try {
-      const { data: matchedRows } = await client
-        .from('users')
-        .select('*')
-        .eq('phone', user.email);
-
-      if (matchedRows && matchedRows.length > 0) {
-        activeProfile = matchedRows[0];
-      }
-    } catch (e) {
-      // ignore
-    }
-
-    if (!activeProfile) {
-      activeProfile = {
-        name: user.user_metadata?.full_name || 'Peer User',
-        phone: user.email,
-        status: 'Student',
-        role: 'mentee',
-      };
-    }
-
-    AppStore.state.user = activeProfile;
+    AppStore.state.user = user;
     AppStore.setState({
-      user: activeProfile,
-      userSession: activeProfile,
-      activeUser: activeProfile,
+      user,
+      userSession: user,
+      activeUser: user,
     });
-    return activeProfile;
+    return user;
   } catch (err) {
     return AppStore.getState().user || null;
   }
@@ -482,7 +417,7 @@ export async function updateProfileContent(bio, videoUrl) {
       updateQuery = updateQuery.eq('email', user.email);
     }
 
-    const { data, error } = await updateQuery;
+    await updateQuery;
 
     const updatedUser = {
       ...user,
@@ -561,7 +496,7 @@ export async function fetchMentors() {
         .filter((u) => u.role === 'mentor' || (u.video_url && String(u.video_url).trim().length > 0))
         .map((u) => ({
           id: String(u.id || u.phone || Math.random()),
-          name: u.name || 'Peer Mentor',
+          name: u.name || u.user_metadata?.full_name || 'Peer Mentor',
           email: u.email || (String(u.phone).includes('@') ? u.phone : ''),
           phone: u.phone || '',
           whatsappNumber: u.whatsapp_number || u.phone || '',
