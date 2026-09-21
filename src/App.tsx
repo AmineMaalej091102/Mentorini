@@ -146,10 +146,7 @@ export default function App() {
   const [user, setUser] = useState<any | null>(null);
   const [profileState, setProfileState] = useState<MentoriniUser | null>(null);
   const [mentors, setMentors] = useState<MentoriniUser[]>(SEED_MENTORS);
-  const [currentPath, setCurrentPath] = useState<string>(() => {
-    const p = window.location.pathname;
-    return p === '/profile' ? '/profile' : '/feed';
-  });
+  const [currentPath, setCurrentPath] = useState<'feed' | 'profile'>('feed');
   const [selectedMentor, setSelectedMentor] = useState<MentoriniUser | null>(null);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
 
@@ -159,42 +156,19 @@ export default function App() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
-  const navigate = useCallback((targetPath: string, replace = false) => {
+  const navigate = useCallback((targetPath: 'feed' | 'profile', replace = false) => {
+    const fullPath = `/${targetPath}`;
     if (replace) {
-      window.history.replaceState({}, '', targetPath);
+      window.history.replaceState({}, document.title, fullPath);
     } else {
-      window.history.pushState({}, '', targetPath);
+      window.history.pushState({}, document.title, fullPath);
     }
     setCurrentPath(targetPath);
     setSelectedMentor(null);
   }, []);
 
-  useEffect(() => {
-    const handlePopState = () => {
-      const p = window.location.pathname;
-      setCurrentPath(p === '/profile' ? '/profile' : '/feed');
-      setSelectedMentor(null);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
   const hydrateUserProfile = useCallback(async (userId: string, email?: string, metadata?: any) => {
     try {
-      const { data: profile, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (profile && !error) {
-        setProfileState(profile);
-        setBioInput(profile.bio || '');
-        setVideoUrlInput(profile.video_url || profile.youtube_url || '');
-        return profile;
-      }
-
       if (email) {
         const { data: profileByEmail } = await supabase
           .from('users')
@@ -208,6 +182,19 @@ export default function App() {
           setVideoUrlInput(profileByEmail.video_url || profileByEmail.youtube_url || '');
           return profileByEmail;
         }
+      }
+
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profile && !error) {
+        setProfileState(profile);
+        setBioInput(profile.bio || '');
+        setVideoUrlInput(profile.video_url || profile.youtube_url || '');
+        return profile;
       }
 
       const generatedProfile: MentoriniUser = {
@@ -226,8 +213,7 @@ export default function App() {
       setBioInput('');
       setVideoUrlInput('');
       return generatedProfile;
-    } catch (err) {
-      console.warn('Profile hydration fallback:', err);
+    } catch {
       const fallbackProfile: MentoriniUser = {
         id: userId,
         email: email || '',
@@ -278,35 +264,65 @@ export default function App() {
   useEffect(() => {
     fetchMentorsCatalog();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        hydrateUserProfile(session.user.id, session.user.email, session.user.user_metadata);
-        if (window.location.pathname === '/' || window.location.pathname === '/login') {
-          navigate('/feed', true);
+    const handleInitialAuth = async () => {
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user) {
+          setUser(data.session.user);
+          await hydrateUserProfile(data.session.user.id, data.session.user.email, data.session.user.user_metadata);
+          window.history.replaceState({}, document.title, '/feed');
+          setCurrentPath('feed');
+          return;
         }
       }
-    });
+
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        setUser(data.session.user);
+        await hydrateUserProfile(data.session.user.id, data.session.user.email, data.session.user.user_metadata);
+        if (window.location.pathname === '/profile') {
+          setCurrentPath('profile');
+        } else {
+          setCurrentPath('feed');
+          window.history.replaceState({}, document.title, '/feed');
+        }
+      }
+    };
+
+    handleInitialAuth();
 
     const { data: authSub } = supabase.auth.onAuthStateChange(async (event: string, session: any) => {
       if (session?.user) {
         setUser(session.user);
         await hydrateUserProfile(session.user.id, session.user.email, session.user.user_metadata);
         await fetchMentorsCatalog();
-        if (event === 'SIGNED_IN' || window.location.pathname === '/' || window.location.pathname === '/login') {
-          navigate('/feed', true);
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+          window.history.replaceState({}, document.title, '/feed');
+        }
+        if (event === 'SIGNED_IN') {
+          window.history.replaceState({}, document.title, '/feed');
+          setCurrentPath('feed');
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfileState(null);
-        navigate('/', true);
+        window.history.replaceState({}, document.title, '/');
       }
     });
 
+    const handlePopState = () => {
+      const p = window.location.pathname;
+      setCurrentPath(p === '/profile' ? 'profile' : 'feed');
+      setSelectedMentor(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
     return () => {
       authSub?.subscription?.unsubscribe();
+      window.removeEventListener('popstate', handlePopState);
     };
-  }, [fetchMentorsCatalog, hydrateUserProfile, navigate]);
+  }, [fetchMentorsCatalog, hydrateUserProfile]);
 
   const loginWithGoogle = async () => {
     setFeedback({ type: 'info', message: 'Connexion bel Google direct...' });
@@ -332,7 +348,7 @@ export default function App() {
     }
     setUser(null);
     setProfileState(null);
-    navigate('/', true);
+    window.history.replaceState({}, document.title, '/');
   };
 
   const handleOpenCreatorModal = () => {
@@ -380,7 +396,7 @@ export default function App() {
       setFeedback({ type: 'success', message: 'L-knowledge mte3ek t-partaga fil base!' });
       setTimeout(() => {
         setIsCreatorModalOpen(false);
-        navigate('/profile');
+        navigate('profile');
       }, 400);
     } catch (err: any) {
       setFeedback({ type: 'error', message: `Erreur: ${err?.message || 'A3wed jarreb'}` });
@@ -400,10 +416,9 @@ export default function App() {
       <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col md:rounded-[32px] md:border border-zinc-200 dark:border-zinc-800">
         
         {/* =========================================================================
-            STRICT LAYOUT GATE:
-            CASE A: UNAUTHENTICATED (user is null)
-            Completely hide bottom navigation bar and header.
-            Render ONLY the Arabizi Text Manifesto and 1-tap Google Login.
+            ABSOLUTE RENDER GATE:
+            IF !user -> Suppress Navigation Bar & Header. Render ONLY Login & Manifesto.
+            IF user  -> Destroy Onboarding View & Sign-In Button. Render ONLY Main App.
            ========================================================================= */}
         {!user ? (
           <main
@@ -428,7 +443,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Header Brand */}
             <div className="pt-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
@@ -440,7 +454,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Arabizi Text Manifesto Card */}
             <div className="my-auto py-4 space-y-4">
               <div className="bg-gradient-to-b from-indigo-50/90 via-white to-zinc-50 dark:from-indigo-950/30 dark:via-zinc-900 dark:to-zinc-900 border border-indigo-100 dark:border-indigo-900/40 rounded-3xl p-6 shadow-sm space-y-4">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-800">
@@ -478,7 +491,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 1-Tap Google Authentication Button */}
             <div className="space-y-3 pb-2">
               <button
                 onClick={loginWithGoogle}
@@ -510,17 +522,12 @@ export default function App() {
             </div>
           </main>
         ) : (
-          /* =========================================================================
-              CASE B: AUTHENTICATED (user is logged in)
-              Login manifesto and sign-in buttons are COMPLETELY HIDDEN.
-              Render ONLY the App Header, Main Content Viewport, and Bottom Dock.
-             ========================================================================= */
           <>
-            {/* TOP HEADER */}
+            {/* TOP APPLICATION HEADER */}
             <header className="w-full bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 p-3.5 flex justify-between items-center sticky top-0 z-40">
               <div
                 className="flex items-center gap-2 cursor-pointer"
-                onClick={() => navigate('/feed')}
+                onClick={() => navigate('feed')}
               >
                 <span className="text-xl font-black tracking-tight text-zinc-900 dark:text-white">
                   mentorini<span className="text-indigo-600">.</span>
@@ -531,7 +538,7 @@ export default function App() {
               </div>
 
               <div
-                onClick={() => navigate('/profile')}
+                onClick={() => navigate('profile')}
                 className="flex items-center gap-2 cursor-pointer"
               >
                 {userAvatarUrl ? (
@@ -549,7 +556,7 @@ export default function App() {
               </div>
             </header>
 
-            {/* MAIN VIEWPORT */}
+            {/* MAIN APP VIEWPORT */}
             <main
               id="app-viewport"
               style={{ paddingBottom: 'calc(84px + env(safe-area-inset-bottom))' }}
@@ -610,7 +617,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* 16:9 Video Player */}
                     {extractYouTubeId(selectedMentor.video_url || selectedMentor.youtube_url) && (
                       <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
                         <iframe
@@ -634,7 +640,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Direct WhatsApp Connection Button */}
                     <button
                       onClick={() =>
                         openWhatsAppChat(
@@ -650,8 +655,8 @@ export default function App() {
                     </button>
                   </div>
                 </section>
-              ) : currentPath === '/feed' ? (
-                /* VIEW: '/feed' - STREAMLINED 16:9 FEED (NO WATCH LOCK) */
+              ) : currentPath === 'feed' ? (
+                /* VIEW: '/feed' - STREAMLINED 16:9 GRID FEED (NO WATCH-LOCK) */
                 <section className="space-y-4">
                   <div className="space-y-4">
                     {mentors.map((mentor) => {
@@ -663,7 +668,6 @@ export default function App() {
                           key={mentor.id}
                           className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm hover:border-indigo-400 dark:hover:border-indigo-500 transition-all"
                         >
-                          {/* Header: Avatar + Creator Name */}
                           <div
                             onClick={() => setSelectedMentor(mentor)}
                             className="p-3.5 pb-2.5 flex items-center justify-between cursor-pointer group"
@@ -695,7 +699,6 @@ export default function App() {
                             </span>
                           </div>
 
-                          {/* 16:9 Video Feed Player / Direct In-Feed Playback */}
                           <div className="px-3.5 pb-3">
                             {videoId ? (
                               <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
@@ -746,10 +749,9 @@ export default function App() {
                   </div>
                 </section>
               ) : (
-                /* VIEW: '/profile' - MY PROFILE ACCOUNT & CONTENT MANAGER */
+                /* VIEW: '/profile' - PROFILE ACCOUNT & CONTENT MANAGER */
                 <section className="space-y-4">
                   <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-4 shadow-sm space-y-4">
-                    {/* Account Identity Header */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         {userAvatarUrl ? (
@@ -786,7 +788,6 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* 16:9 Video Preview */}
                     {extractYouTubeId(profileState?.video_url || profileState?.youtube_url) ? (
                       <div className="space-y-2">
                         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
@@ -814,7 +815,6 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Bio & Resources */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
@@ -836,7 +836,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Quick Form to Update Bio and 16:9 Video */}
                     <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4 space-y-3">
                       <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
@@ -954,19 +953,19 @@ export default function App() {
               </div>
             )}
 
-            {/* FIXED BOTTOM NAVIGATION BAR WITH EXPLORE ICON, [+] CREATOR NODE, AND GOOGLE AVATAR */}
+            {/* FIXED BOTTOM NAVIGATION BAR */}
             <nav
               id="app-navigation"
               style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
               className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800/80 px-8 pt-3 flex justify-between items-center z-40 md:rounded-b-[28px]"
             >
-              {/* 1. Explore Navigation Icon */}
+              {/* 1. Explore/Feed Grid Icon */}
               <button
-                onClick={() => navigate('/feed')}
-                id="nav-explore"
+                onClick={() => navigate('feed')}
+                id="nav-explore-feed"
                 aria-label="Explore Feed"
                 className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
-                  currentPath === '/feed' && !selectedMentor
+                  currentPath === 'feed' && !selectedMentor
                     ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 scale-105'
                     : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
@@ -974,23 +973,23 @@ export default function App() {
                 <Compass className="w-5 h-5" />
               </button>
 
-              {/* 2. [+] Creator Upload Engine */}
+              {/* 2. [+] Upload Icon */}
               <button
                 onClick={handleOpenCreatorModal}
-                id="nav-creator-plus"
+                id="nav-creator-upload"
                 aria-label="Add Content"
                 className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white dark:border-zinc-900"
               >
                 <Plus className="w-5 h-5 stroke-[2.5]" />
               </button>
 
-              {/* 3. Google Profile Avatar Identity Circle */}
+              {/* 3. Google Profile Avatar / Initials */}
               <button
-                onClick={() => navigate('/profile')}
-                id="nav-my-profile"
+                onClick={() => navigate('profile')}
+                id="nav-profile-avatar"
                 aria-label="My Profile"
                 className={`p-1.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
-                  currentPath === '/profile' && !selectedMentor
+                  currentPath === 'profile' && !selectedMentor
                     ? 'ring-2 ring-indigo-600 dark:ring-indigo-400 scale-105'
                     : 'opacity-75 hover:opacity-100'
                 }`}
@@ -1000,10 +999,10 @@ export default function App() {
                     src={userAvatarUrl}
                     alt="Google Profile"
                     referrerPolicy="no-referrer"
-                    className="w-7 h-7 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shadow-sm"
+                    className="w-7 h-7 rounded-full object-cover border border-zinc-200 dark:border-zinc-700"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs">
                     {userInitials}
                   </div>
                 )}
