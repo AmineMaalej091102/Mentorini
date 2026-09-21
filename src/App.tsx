@@ -166,6 +166,14 @@ export default function App() {
   };
 
   useEffect(() => {
+    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (!metaThemeColor) {
+      metaThemeColor = document.createElement('meta');
+      metaThemeColor.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaThemeColor);
+    }
+    metaThemeColor.setAttribute('content', '#090D1A');
+
     const handleAuthInit = async () => {
       if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
         const { data } = await supabase.auth.getSession();
