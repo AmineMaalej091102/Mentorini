@@ -40,9 +40,10 @@ function App() {
         <nav 
           id="app-navigation" 
           style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
-          className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-surfaceDark/90 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800/80 px-6 pt-3.5 flex justify-between items-center z-50 md:rounded-b-[28px]"
+          className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-surfaceDark/90 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800/80 px-5 pt-3.5 flex justify-between items-center z-50 md:rounded-b-[28px]"
         >
             <button onClick={() => (window as any).switchTab?.('feed')} id="nav-feed" className="text-indigoNeon text-xs font-mono font-bold cursor-pointer">Feed</button>
+            <button onClick={() => (window as any).switchTab?.('onboarding')} id="nav-onboarding" className="text-gray-400 dark:text-gray-500 text-xs font-mono cursor-pointer">Intro</button>
             <button onClick={() => (window as any).switchTab?.('dashboard')} id="nav-dashboard" className="text-gray-400 dark:text-gray-500 text-xs font-mono cursor-pointer">Dashboard</button>
             <button onClick={() => (window as any).switchTab?.('idea')} id="nav-idea" className="text-gray-400 dark:text-gray-500 text-xs font-mono cursor-pointer">Idea</button>
         </nav>

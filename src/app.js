@@ -1,51 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 
-function getEnvVariable(key) {
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-    return import.meta.env[key];
-  }
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key];
-  }
-  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__[key]) {
-    return window.__ENV__[key];
-  }
-  if (typeof window !== 'undefined' && window[key]) {
-    return window[key];
-  }
-  if (typeof localStorage !== 'undefined') {
-    const saved = localStorage.getItem(key);
-    if (saved) return saved;
-  }
-  return '';
+// ============================================================================
+// 1. GLOBAL CLIENT MAPPING (Window Scope)
+// ============================================================================
+if (typeof window !== 'undefined' && (!window.supabase || !window.supabase.auth)) {
+  window.supabase = createClient(
+    'https://quweyaxneqyyjfhhccbd.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder',
+    {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+    }
+  );
 }
 
-export const SUPABASE_URL = 
-  getEnvVariable('VITE_SUPABASE_URL') || 
-  getEnvVariable('SUPABASE_URL') || 
-  'https://quweyaxneqyyjfhhccbd.supabase.co';
+const supabase = window.supabase;
 
-export const SUPABASE_ANON_KEY = 
-  getEnvVariable('VITE_SUPABASE_ANON_KEY') || 
-  getEnvVariable('SUPABASE_ANON_KEY') || 
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
-});
-
-if (typeof window !== 'undefined') {
-  window.supabase = supabase;
-}
+export { supabase };
 
 const STORAGE_KEYS = {
   USER_SESSION: 'mentorini_user_session_v3',
@@ -314,16 +293,19 @@ if (typeof window !== 'undefined') {
   window.renderEngine = window.renderEngine || renderEngine;
 }
 
+// ============================================================================
+// 2. REAL-TIME AUTHENTICATION LISTENER & AUTOMATED SESSION HYDRATION
+// ============================================================================
 supabase.auth.onAuthStateChange(async (event, session) => {
   if (session && session.user && session.user.email) {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('*')
         .eq('email', session.user.email)
         .single();
 
-      const userRecord = data || {
+      const userProfile = data || {
         id: session.user.id,
         email: session.user.email,
         name: session.user.user_metadata?.full_name || 'Peer User',
@@ -333,11 +315,11 @@ supabase.auth.onAuthStateChange(async (event, session) => {
         video_url: '',
       };
 
-      AppStore.state.user = userRecord;
+      AppStore.state.user = userProfile;
       AppStore.setState({
-        user: userRecord,
-        userSession: userRecord,
-        activeUser: userRecord,
+        user: userProfile,
+        userSession: userProfile,
+        activeUser: userProfile,
         tabRouter: 'feed',
       });
       await AppStore.fetchMentors();
@@ -368,6 +350,9 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   }
 });
 
+// ============================================================================
+// 3. AUTH METHODS
+// ============================================================================
 export async function loginWithGoogle() {
   AppStore.setState({ isLoading: true, error: null });
   try {
@@ -392,16 +377,15 @@ if (typeof window !== 'undefined') {
 export const signInWithGoogle = loginWithGoogle;
 
 export async function checkUserSession() {
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
   try {
-    const { data, error } = await client.auth.getUser();
+    const { data, error } = await supabase.auth.getUser();
     if (error || !data || !data.user) {
       return AppStore.getState().user || null;
     }
     const user = data.user;
     let activeProfile = null;
     try {
-      const { data: matchedRow } = await client
+      const { data: matchedRow } = await supabase
         .from('users')
         .select('*')
         .eq('email', user.email)
@@ -439,12 +423,12 @@ if (typeof window !== 'undefined') {
   window.checkUserSession = checkUserSession;
 }
 
+// ============================================================================
+// 4. THE PEER CREATOR UPDATE ACTION
+// ============================================================================
 export async function updateProfileContent(bio, videoUrl) {
-  const state = AppStore.getState();
-  const user = state.user || state.userSession || state.activeUser;
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
-
-  if (!user) {
+  const user = AppStore.state.user;
+  if (!user || !user.email) {
     const errMsg = 'Lazmek tkoun connecti bel Google mte3ek se3a bech t-partagi!';
     if (typeof window !== 'undefined' && window.alert) {
       window.alert(errMsg);
@@ -459,13 +443,10 @@ export async function updateProfileContent(bio, videoUrl) {
   AppStore.setState({ isLoading: true, error: null });
 
   try {
-    await client
+    await supabase
       .from('users')
-      .update({
-        bio: trimmedBio,
-        video_url: trimmedVideoUrl,
-      })
-      .eq('email', user.email);
+      .update({ bio: trimmedBio, video_url: trimmedVideoUrl })
+      .eq('email', AppStore.state.user.email);
 
     const updatedUser = {
       ...user,
@@ -525,14 +506,16 @@ export async function updateUserKnowledge({ bio, videoUrl, phone }) {
   return updateProfileContent(bio, videoUrl);
 }
 
+// ============================================================================
+// 5. DIRECTORY & REAL-TIME FEED
+// ============================================================================
 let realtimeChannel = null;
 
 export async function fetchMentors() {
   AppStore.setState({ isLoading: true, error: null });
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
   try {
-    const { data: usersData, error: usersError } = await client
+    const { data: usersData, error: usersError } = await supabase
       .from('users')
       .select('*')
       .order('created_at', { ascending: false });
@@ -560,7 +543,7 @@ export async function fetchMentors() {
     }
 
     if (fetchedMentors.length === 0) {
-      const { data: legacyMentors, error: legacyError } = await client
+      const { data: legacyMentors, error: legacyError } = await supabase
         .from('mentors')
         .select('*')
         .order('created_at', { ascending: false });
@@ -608,9 +591,8 @@ export async function fetchMentors() {
 
 export function subscribeToMentorsRealtime() {
   if (realtimeChannel) return realtimeChannel;
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
 
-  realtimeChannel = client
+  realtimeChannel = supabase
     .channel('mentorini-unified-sync')
     .on(
       'postgres_changes',
@@ -661,9 +643,8 @@ export function executeWhatsAppRedirect(phone, text) {
 }
 
 export async function signOutUser() {
-  const client = (typeof window !== 'undefined' && window.supabase) ? window.supabase : supabase;
   try {
-    await client.auth.signOut();
+    await supabase.auth.signOut();
   } catch (err) {
     console.warn(err);
   }
