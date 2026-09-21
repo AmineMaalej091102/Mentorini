@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   LogOut,
   Zap,
-  User as UserIcon,
 } from 'lucide-react';
 
 const SUPABASE_URL = 'https://quweyaxneqyyjfhhccbd.supabase.co';
@@ -146,7 +145,9 @@ export default function App() {
   const [user, setUser] = useState<any | null>(null);
   const [profileState, setProfileState] = useState<MentoriniUser | null>(null);
   const [mentors, setMentors] = useState<MentoriniUser[]>(SEED_MENTORS);
-  const [currentPath, setCurrentPath] = useState<'feed' | 'profile'>('feed');
+  const [currentPath, setCurrentPath] = useState<'feed' | 'profile'>(() => {
+    return window.location.pathname === '/profile' ? 'profile' : 'feed';
+  });
   const [selectedMentor, setSelectedMentor] = useState<MentoriniUser | null>(null);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
 
@@ -264,32 +265,22 @@ export default function App() {
   useEffect(() => {
     fetchMentorsCatalog();
 
-    const handleInitialAuth = async () => {
-      if (window.location.hash && window.location.hash.includes('access_token')) {
-        const { data } = await supabase.auth.getSession();
-        if (data.session?.user) {
-          setUser(data.session.user);
-          await hydrateUserProfile(data.session.user.id, data.session.user.email, data.session.user.user_metadata);
-          window.history.replaceState({}, document.title, '/feed');
-          setCurrentPath('feed');
-          return;
-        }
-      }
-
+    const initAuth = async () => {
       const { data } = await supabase.auth.getSession();
-      if (data.session?.user) {
+      if (data.session) {
         setUser(data.session.user);
-        await hydrateUserProfile(data.session.user.id, data.session.user.email, data.session.user.user_metadata);
-        if (window.location.pathname === '/profile') {
-          setCurrentPath('profile');
-        } else {
-          setCurrentPath('feed');
+        await hydrateUserProfile(
+          data.session.user.id,
+          data.session.user.email,
+          data.session.user.user_metadata
+        );
+        if (window.location.hash && window.location.hash.includes('access_token')) {
           window.history.replaceState({}, document.title, '/feed');
         }
       }
     };
 
-    handleInitialAuth();
+    initAuth();
 
     const { data: authSub } = supabase.auth.onAuthStateChange(async (event: string, session: any) => {
       if (session?.user) {
@@ -411,16 +402,495 @@ export default function App() {
     .charAt(0)
     .toUpperCase();
 
-  return (
-    <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-950 font-sans">
-      <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col md:rounded-[32px] md:border border-zinc-200 dark:border-zinc-800">
-        
-        {/* =========================================================================
-            ABSOLUTE RENDER GATE:
-            IF !user -> Suppress Navigation Bar & Header. Render ONLY Login & Manifesto.
-            IF user  -> Destroy Onboarding View & Sign-In Button. Render ONLY Main App.
-           ========================================================================= */}
-        {!user ? (
+  if (user || window.location.pathname === '/feed' || window.location.hash.includes('access_token')) {
+    return (
+      <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-950 font-sans">
+        <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col md:rounded-[32px] md:border border-zinc-200 dark:border-zinc-800">
+          <header className="w-full bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 p-3.5 flex justify-between items-center sticky top-0 z-40">
+            <div
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => navigate('feed')}
+            >
+              <span className="text-xl font-black tracking-tight text-zinc-900 dark:text-white">
+                mentorini<span className="text-indigo-600">.</span>
+              </span>
+              <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                100% Free 🇹🇳
+              </span>
+            </div>
+
+            <div
+              onClick={() => navigate('profile')}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              {userAvatarUrl ? (
+                <img
+                  src={userAvatarUrl}
+                  alt="Google Profile"
+                  referrerPolicy="no-referrer"
+                  className="w-8 h-8 rounded-full object-cover border border-indigo-500 shadow-sm"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                  {userInitials}
+                </div>
+              )}
+            </div>
+          </header>
+
+          <main
+            id="app-viewport"
+            style={{ paddingBottom: 'calc(84px + env(safe-area-inset-bottom))' }}
+            className="flex-1 overflow-y-auto p-4 space-y-4"
+          >
+            {feedback && (
+              <div
+                className={`p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                  feedback.type === 'error'
+                    ? 'bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
+                    : feedback.type === 'success'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                    : 'bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                }`}
+              >
+                <span>{feedback.message}</span>
+                <button onClick={() => setFeedback(null)} className="cursor-pointer ml-2">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {selectedMentor ? (
+              <section className="space-y-4">
+                <button
+                  onClick={() => setSelectedMentor(null)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer py-1"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Rja3 lel Feed</span>
+                </button>
+
+                <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center gap-3.5">
+                    {selectedMentor.avatar_url ? (
+                      <img
+                        src={selectedMentor.avatar_url}
+                        alt={selectedMentor.name}
+                        referrerPolicy="no-referrer"
+                        className="w-14 h-14 rounded-2xl object-cover shadow-md shrink-0 border border-zinc-200 dark:border-zinc-700"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
+                        {(selectedMentor.name || 'M').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <h2 className="text-lg font-black text-zinc-900 dark:text-white">
+                        {selectedMentor.name}
+                      </h2>
+                      <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                        {selectedMentor.status || 'Peer Mentor IT'}
+                      </p>
+                      <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
+                        {selectedMentor.category ? selectedMentor.category.replace('_', ' ') : 'Peer IT'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {extractYouTubeId(selectedMentor.video_url || selectedMentor.youtube_url) && (
+                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
+                      <iframe
+                        src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
+                          extractYouTubeId(selectedMentor.video_url || selectedMentor.youtube_url)!
+                        )}?autoplay=1&rel=0&modestbranding=1`}
+                        title={selectedMentor.name}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5 pt-1">
+                    <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      Bio & Resources
+                    </h3>
+                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                      {renderBioWithChips(selectedMentor.bio)}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      openWhatsAppChat(
+                        selectedMentor.whatsapp_number || selectedMentor.phone,
+                        selectedMentor.name,
+                        selectedMentor.feynman_topic
+                      )
+                    }
+                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Connecti m3ah direct 3la WhatsApp</span>
+                  </button>
+                </div>
+              </section>
+            ) : currentPath === 'feed' ? (
+              <section className="space-y-4">
+                <div className="space-y-4">
+                  {mentors.map((mentor) => {
+                    const videoId = extractYouTubeId(mentor.video_url || mentor.youtube_url);
+                    const isPlaying = playingVideoId === mentor.id;
+
+                    return (
+                      <article
+                        key={mentor.id}
+                        className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm hover:border-indigo-400 dark:hover:border-indigo-500 transition-all"
+                      >
+                        <div
+                          onClick={() => setSelectedMentor(mentor)}
+                          className="p-3.5 pb-2.5 flex items-center justify-between cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3">
+                            {mentor.avatar_url ? (
+                              <img
+                                src={mentor.avatar_url}
+                                alt={mentor.name}
+                                referrerPolicy="no-referrer"
+                                className="w-10 h-10 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white flex items-center justify-center font-black text-sm shadow-sm group-hover:scale-105 transition-transform">
+                                {(mentor.name || 'M').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <h3 className="font-black text-xs text-zinc-900 dark:text-zinc-50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                {mentor.name}
+                              </h3>
+                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                                {mentor.status || 'Peer Mentor IT'}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
+                            Profil ↗
+                          </span>
+                        </div>
+
+                        <div className="px-3.5 pb-3">
+                          {videoId ? (
+                            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
+                              {isPlaying ? (
+                                <iframe
+                                  src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
+                                    videoId
+                                  )}?autoplay=1&rel=0&modestbranding=1`}
+                                  title={mentor.name}
+                                  className="w-full h-full border-0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                />
+                              ) : (
+                                <div
+                                  onClick={() => setPlayingVideoId(mentor.id)}
+                                  className="relative w-full h-full flex flex-col items-center justify-center bg-zinc-900 group cursor-pointer"
+                                >
+                                  <img
+                                    src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+                                    alt={mentor.name}
+                                    className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-95 transition-opacity"
+                                  />
+                                  <div className="relative z-10 w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-xl shadow-red-600/50 group-hover:scale-110 transition-transform">
+                                    <Play className="w-5 h-5 ml-0.5 fill-current" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => setSelectedMentor(mentor)}
+                              className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700/60 text-xs text-zinc-600 dark:text-zinc-300 cursor-pointer"
+                            >
+                              {renderBioWithChips(mentor.bio)}
+                            </div>
+                          )}
+                        </div>
+
+                        {videoId && mentor.bio && (
+                          <div className="px-3.5 pb-3 text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2">
+                            {renderBioWithChips(mentor.bio)}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : (
+              <section className="space-y-4">
+                <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-4 shadow-sm space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      {userAvatarUrl ? (
+                        <img
+                          src={userAvatarUrl}
+                          alt="Google Profile"
+                          referrerPolicy="no-referrer"
+                          className="w-12 h-12 rounded-2xl object-cover shadow-md border border-indigo-500"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-lg shadow-md">
+                          {userInitials}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-black text-zinc-900 dark:text-white truncate">
+                          {profileState?.name || user?.user_metadata?.full_name || 'Peer Creator'}
+                        </h2>
+                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">
+                          {user?.email || 'compte@google.com'}
+                        </p>
+                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="w-3 h-3" /> Compte Google Vérifié
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleSignOut}
+                      className="px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer flex items-center gap-1"
+                    >
+                      <LogOut className="w-3 h-3" />
+                      <span>Khrouj</span>
+                    </button>
+                  </div>
+
+                  {extractYouTubeId(profileState?.video_url || profileState?.youtube_url) ? (
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Video 16:9 Mte3ek
+                      </h3>
+                      <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
+                        <iframe
+                          src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
+                            extractYouTubeId(profileState?.video_url || profileState?.youtube_url)!
+                          )}?rel=0`}
+                          title="My Video Preview"
+                          className="w-full h-full border-0"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-dashed border-zinc-300 dark:border-zinc-700 text-center space-y-1">
+                      <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                        Ma zelt ma 7attitech video 16:9!
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        Enzel 3la [+] l-louta bech tzid lien YouTube w t-partagi l-knowledge.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Bio & Liens mte3ek
+                      </h3>
+                      <button
+                        onClick={handleOpenCreatorModal}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        Baddel ✎
+                      </button>
+                    </div>
+                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                      {profileState?.bio ? (
+                        renderBioWithChips(profileState.bio)
+                      ) : (
+                        <span className="italic text-zinc-400">Faragh. Enzel 3la [+] bech t3ammer el bio mte3ek.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4 space-y-3">
+                    <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Tbadil el Bio w Video YouTube</span>
+                    </h3>
+
+                    <form onSubmit={handleCreatorSubmit} className="space-y-3 text-xs">
+                      <div>
+                        <label className="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
+                          Bio & Liens (Drive / GitHub / Notion)
+                        </label>
+                        <textarea
+                          rows={3}
+                          required
+                          value={bioInput}
+                          onChange={(e) => setBioInput(e.target.value)}
+                          placeholder="Chnowa tnajjem t3awen w les liens mte3ek..."
+                          className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
+                          Lien YouTube 16:9 (Horizontal)
+                        </label>
+                        <input
+                          type="url"
+                          value={videoUrlInput}
+                          onChange={(e) => setVideoUrlInput(e.target.value)}
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSavingProfile}
+                        className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingProfile ? 'Enregistrement fil base...' : 'Sauvegarder mon profil'}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </section>
+            )}
+          </main>
+
+          {isCreatorModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+              <div
+                style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}
+                className="w-full max-w-[480px] bg-white dark:bg-zinc-900 rounded-t-[32px] sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                  <h2 className="text-sm font-black text-zinc-900 dark:text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                    <span>Abda share el knowledge mte3ek</span>
+                  </h2>
+                  <button
+                    onClick={() => setIsCreatorModalOpen(false)}
+                    className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 flex items-center justify-center font-bold text-xs cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreatorSubmit} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+                      Bio & Liens (Drive / GitHub / Notion) *
+                    </label>
+                    <textarea
+                      rows={4}
+                      required
+                      value={bioInput}
+                      onChange={(e) => setBioInput(e.target.value)}
+                      placeholder="Chnowa tnajjem t3awen w les liens mte3ek (Drive, GitHub, Notion)..."
+                      className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+                      Lien YouTube 16:9 (Horizontal)
+                    </label>
+                    <input
+                      type="url"
+                      value={videoUrlInput}
+                      onChange={(e) => setVideoUrlInput(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatorModalOpen(false)}
+                      className="px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingProfile}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black shadow cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingProfile ? 'Syncing...' : 'Partagi'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <nav
+            id="app-navigation"
+            style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+            className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800/80 px-8 pt-3 flex justify-between items-center z-40 md:rounded-b-[28px]"
+          >
+            {/* 1. Explore Compass Icon */}
+            <button
+              onClick={() => navigate('feed')}
+              id="nav-explore-feed"
+              aria-label="Explore Feed"
+              className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
+                currentPath === 'feed' && !selectedMentor
+                  ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 scale-105'
+                  : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+              }`}
+            >
+              <Compass className="w-5 h-5" />
+            </button>
+
+            {/* 2. [+] Upload Icon */}
+            <button
+              onClick={handleOpenCreatorModal}
+              id="nav-creator-upload"
+              aria-label="Add Content"
+              className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white dark:border-zinc-900"
+            >
+              <Plus className="w-5 h-5 stroke-[2.5]" />
+            </button>
+
+            {/* 3. High-Resolution Google Avatar Picture */}
+            <button
+              onClick={() => navigate('profile')}
+              id="nav-profile-avatar"
+              aria-label="My Profile"
+              className={`p-1.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
+                currentPath === 'profile' && !selectedMentor
+                  ? 'ring-2 ring-indigo-600 dark:ring-indigo-400 scale-105'
+                  : 'opacity-75 hover:opacity-100'
+              }`}
+            >
+              {userAvatarUrl ? (
+                <img
+                  src={userAvatarUrl}
+                  alt="Google Profile"
+                  referrerPolicy="no-referrer"
+                  className="w-7 h-7 rounded-full object-cover border border-zinc-200 dark:border-zinc-700"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs">
+                  {userInitials}
+                </div>
+              )}
+            </button>
+          </nav>
+        </div>
+      </div>
+    );
+  } else {
+    return (
+      <div className="flex justify-center items-center min-h-screen antialiased text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-950 font-sans">
+        <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col md:rounded-[32px] md:border border-zinc-200 dark:border-zinc-800">
           <main
             id="auth-viewport"
             style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}
@@ -521,497 +991,8 @@ export default function App() {
               </p>
             </div>
           </main>
-        ) : (
-          <>
-            {/* TOP APPLICATION HEADER */}
-            <header className="w-full bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 p-3.5 flex justify-between items-center sticky top-0 z-40">
-              <div
-                className="flex items-center gap-2 cursor-pointer"
-                onClick={() => navigate('feed')}
-              >
-                <span className="text-xl font-black tracking-tight text-zinc-900 dark:text-white">
-                  mentorini<span className="text-indigo-600">.</span>
-                </span>
-                <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
-                  100% Free 🇹🇳
-                </span>
-              </div>
-
-              <div
-                onClick={() => navigate('profile')}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                {userAvatarUrl ? (
-                  <img
-                    src={userAvatarUrl}
-                    alt="Google Profile"
-                    referrerPolicy="no-referrer"
-                    className="w-8 h-8 rounded-full object-cover border border-indigo-500 shadow-sm"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                    {userInitials}
-                  </div>
-                )}
-              </div>
-            </header>
-
-            {/* MAIN APP VIEWPORT */}
-            <main
-              id="app-viewport"
-              style={{ paddingBottom: 'calc(84px + env(safe-area-inset-bottom))' }}
-              className="flex-1 overflow-y-auto p-4 space-y-4"
-            >
-              {feedback && (
-                <div
-                  className={`p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
-                    feedback.type === 'error'
-                      ? 'bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
-                      : feedback.type === 'success'
-                      ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
-                      : 'bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                  }`}
-                >
-                  <span>{feedback.message}</span>
-                  <button onClick={() => setFeedback(null)} className="cursor-pointer ml-2">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-
-              {/* VIEW: CREATOR INDEPENDENT PROFILE (Opened from feed) */}
-              {selectedMentor ? (
-                <section className="space-y-4">
-                  <button
-                    onClick={() => setSelectedMentor(null)}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer py-1"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Rja3 lel Feed</span>
-                  </button>
-
-                  <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-5 shadow-sm space-y-4">
-                    <div className="flex items-center gap-3.5">
-                      {selectedMentor.avatar_url ? (
-                        <img
-                          src={selectedMentor.avatar_url}
-                          alt={selectedMentor.name}
-                          referrerPolicy="no-referrer"
-                          className="w-14 h-14 rounded-2xl object-cover shadow-md shrink-0 border border-zinc-200 dark:border-zinc-700"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
-                          {(selectedMentor.name || 'M').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div>
-                        <h2 className="text-lg font-black text-zinc-900 dark:text-white">
-                          {selectedMentor.name}
-                        </h2>
-                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                          {selectedMentor.status || 'Peer Mentor IT'}
-                        </p>
-                        <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
-                          {selectedMentor.category ? selectedMentor.category.replace('_', ' ') : 'Peer IT'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {extractYouTubeId(selectedMentor.video_url || selectedMentor.youtube_url) && (
-                      <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
-                        <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
-                            extractYouTubeId(selectedMentor.video_url || selectedMentor.youtube_url)!
-                          )}?autoplay=1&rel=0&modestbranding=1`}
-                          title={selectedMentor.name}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5 pt-1">
-                      <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                        Bio & Resources
-                      </h3>
-                      <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        {renderBioWithChips(selectedMentor.bio)}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() =>
-                        openWhatsAppChat(
-                          selectedMentor.whatsapp_number || selectedMentor.phone,
-                          selectedMentor.name,
-                          selectedMentor.feynman_topic
-                        )
-                      }
-                      className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>Connecti m3ah direct 3la WhatsApp</span>
-                    </button>
-                  </div>
-                </section>
-              ) : currentPath === 'feed' ? (
-                /* VIEW: '/feed' - STREAMLINED 16:9 GRID FEED (NO WATCH-LOCK) */
-                <section className="space-y-4">
-                  <div className="space-y-4">
-                    {mentors.map((mentor) => {
-                      const videoId = extractYouTubeId(mentor.video_url || mentor.youtube_url);
-                      const isPlaying = playingVideoId === mentor.id;
-
-                      return (
-                        <article
-                          key={mentor.id}
-                          className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm hover:border-indigo-400 dark:hover:border-indigo-500 transition-all"
-                        >
-                          <div
-                            onClick={() => setSelectedMentor(mentor)}
-                            className="p-3.5 pb-2.5 flex items-center justify-between cursor-pointer group"
-                          >
-                            <div className="flex items-center gap-3">
-                              {mentor.avatar_url ? (
-                                <img
-                                  src={mentor.avatar_url}
-                                  alt={mentor.name}
-                                  referrerPolicy="no-referrer"
-                                  className="w-10 h-10 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white flex items-center justify-center font-black text-sm shadow-sm group-hover:scale-105 transition-transform">
-                                  {(mentor.name || 'M').charAt(0).toUpperCase()}
-                                </div>
-                              )}
-                              <div>
-                                <h3 className="font-black text-xs text-zinc-900 dark:text-zinc-50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                  {mentor.name}
-                                </h3>
-                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-                                  {mentor.status || 'Peer Mentor IT'}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
-                              Profil ↗
-                            </span>
-                          </div>
-
-                          <div className="px-3.5 pb-3">
-                            {videoId ? (
-                              <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
-                                {isPlaying ? (
-                                  <iframe
-                                    src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
-                                      videoId
-                                    )}?autoplay=1&rel=0&modestbranding=1`}
-                                    title={mentor.name}
-                                    className="w-full h-full border-0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                  />
-                                ) : (
-                                  <div
-                                    onClick={() => setPlayingVideoId(mentor.id)}
-                                    className="relative w-full h-full flex flex-col items-center justify-center bg-zinc-900 group cursor-pointer"
-                                  >
-                                    <img
-                                      src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
-                                      alt={mentor.name}
-                                      className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-95 transition-opacity"
-                                    />
-                                    <div className="relative z-10 w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-xl shadow-red-600/50 group-hover:scale-110 transition-transform">
-                                      <Play className="w-5 h-5 ml-0.5 fill-current" />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div
-                                onClick={() => setSelectedMentor(mentor)}
-                                className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700/60 text-xs text-zinc-600 dark:text-zinc-300 cursor-pointer"
-                              >
-                                {renderBioWithChips(mentor.bio)}
-                              </div>
-                            )}
-                          </div>
-
-                          {videoId && mentor.bio && (
-                            <div className="px-3.5 pb-3 text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2">
-                              {renderBioWithChips(mentor.bio)}
-                            </div>
-                          )}
-                        </article>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : (
-                /* VIEW: '/profile' - PROFILE ACCOUNT & CONTENT MANAGER */
-                <section className="space-y-4">
-                  <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-4 shadow-sm space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        {userAvatarUrl ? (
-                          <img
-                            src={userAvatarUrl}
-                            alt="Google Profile"
-                            referrerPolicy="no-referrer"
-                            className="w-12 h-12 rounded-2xl object-cover shadow-md border border-indigo-500"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-lg shadow-md">
-                            {userInitials}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <h2 className="text-sm font-black text-zinc-900 dark:text-white truncate">
-                            {profileState?.name || user.user_metadata?.full_name || 'Peer Creator'}
-                          </h2>
-                          <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">
-                            {user.email}
-                          </p>
-                          <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="w-3 h-3" /> Compte Google Vérifié
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleSignOut}
-                        className="px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer flex items-center gap-1"
-                      >
-                        <LogOut className="w-3 h-3" />
-                        <span>Khrouj</span>
-                      </button>
-                    </div>
-
-                    {extractYouTubeId(profileState?.video_url || profileState?.youtube_url) ? (
-                      <div className="space-y-2">
-                        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Video 16:9 Mte3ek
-                        </h3>
-                        <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
-                          <iframe
-                            src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
-                              extractYouTubeId(profileState?.video_url || profileState?.youtube_url)!
-                            )}?rel=0`}
-                            title="My Video Preview"
-                            className="w-full h-full border-0"
-                            allowFullScreen
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-dashed border-zinc-300 dark:border-zinc-700 text-center space-y-1">
-                        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                          Ma zelt ma 7attitech video 16:9!
-                        </p>
-                        <p className="text-[11px] text-zinc-500">
-                          Enzel 3la [+] l-louta bech tzid lien YouTube w t-partagi l-knowledge.
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Bio & Liens mte3ek
-                        </h3>
-                        <button
-                          onClick={handleOpenCreatorModal}
-                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                        >
-                          Baddel ✎
-                        </button>
-                      </div>
-                      <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        {profileState?.bio ? (
-                          renderBioWithChips(profileState.bio)
-                        ) : (
-                          <span className="italic text-zinc-400">Faragh. Enzel 3la [+] bech t3ammer el bio mte3ek.</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4 space-y-3">
-                      <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Tbadil el Bio w Video YouTube</span>
-                      </h3>
-
-                      <form onSubmit={handleCreatorSubmit} className="space-y-3 text-xs">
-                        <div>
-                          <label className="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
-                            Bio & Liens (Drive / GitHub / Notion)
-                          </label>
-                          <textarea
-                            rows={3}
-                            required
-                            value={bioInput}
-                            onChange={(e) => setBioInput(e.target.value)}
-                            placeholder="Chnowa tnajjem t3awen w les liens mte3ek..."
-                            className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
-                            Lien YouTube 16:9 (Horizontal)
-                          </label>
-                          <input
-                            type="url"
-                            value={videoUrlInput}
-                            onChange={(e) => setVideoUrlInput(e.target.value)}
-                            placeholder="https://www.youtube.com/watch?v=..."
-                            className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isSavingProfile}
-                          className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          {isSavingProfile ? 'Enregistrement fil base...' : 'Sauvegarder mon profil'}
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </section>
-              )}
-            </main>
-
-            {/* CREATOR UPDATE MODAL OVERLAY */}
-            {isCreatorModalOpen && (
-              <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-                <div
-                  style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}
-                  className="w-full max-w-[480px] bg-white dark:bg-zinc-900 rounded-t-[32px] sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto"
-                >
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                    <h2 className="text-sm font-black text-zinc-900 dark:text-white flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-indigo-600" />
-                      <span>Abda share el knowledge mte3ek</span>
-                    </h2>
-                    <button
-                      onClick={() => setIsCreatorModalOpen(false)}
-                      className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 flex items-center justify-center font-bold text-xs cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleCreatorSubmit} className="space-y-3 text-xs">
-                    <div>
-                      <label className="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
-                        Bio & Liens (Drive / GitHub / Notion) *
-                      </label>
-                      <textarea
-                        rows={4}
-                        required
-                        value={bioInput}
-                        onChange={(e) => setBioInput(e.target.value)}
-                        placeholder="Chnowa tnajjem t3awen w les liens mte3ek (Drive, GitHub, Notion)..."
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-zinc-900 dark:text-zinc-100 mb-1">
-                        Lien YouTube 16:9 (Horizontal)
-                      </label>
-                      <input
-                        type="url"
-                        value={videoUrlInput}
-                        onChange={(e) => setVideoUrlInput(e.target.value)}
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-
-                    <div className="pt-2 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsCreatorModalOpen(false)}
-                        className="px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold cursor-pointer"
-                      >
-                        Annuler
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSavingProfile}
-                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black shadow cursor-pointer disabled:opacity-50"
-                      >
-                        {isSavingProfile ? 'Syncing...' : 'Partagi'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* FIXED BOTTOM NAVIGATION BAR */}
-            <nav
-              id="app-navigation"
-              style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
-              className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800/80 px-8 pt-3 flex justify-between items-center z-40 md:rounded-b-[28px]"
-            >
-              {/* 1. Explore/Feed Grid Icon */}
-              <button
-                onClick={() => navigate('feed')}
-                id="nav-explore-feed"
-                aria-label="Explore Feed"
-                className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
-                  currentPath === 'feed' && !selectedMentor
-                    ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 scale-105'
-                    : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                }`}
-              >
-                <Compass className="w-5 h-5" />
-              </button>
-
-              {/* 2. [+] Upload Icon */}
-              <button
-                onClick={handleOpenCreatorModal}
-                id="nav-creator-upload"
-                aria-label="Add Content"
-                className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white dark:border-zinc-900"
-              >
-                <Plus className="w-5 h-5 stroke-[2.5]" />
-              </button>
-
-              {/* 3. Google Profile Avatar / Initials */}
-              <button
-                onClick={() => navigate('profile')}
-                id="nav-profile-avatar"
-                aria-label="My Profile"
-                className={`p-1.5 rounded-xl cursor-pointer transition-all flex items-center justify-center ${
-                  currentPath === 'profile' && !selectedMentor
-                    ? 'ring-2 ring-indigo-600 dark:ring-indigo-400 scale-105'
-                    : 'opacity-75 hover:opacity-100'
-                }`}
-              >
-                {userAvatarUrl ? (
-                  <img
-                    src={userAvatarUrl}
-                    alt="Google Profile"
-                    referrerPolicy="no-referrer"
-                    className="w-7 h-7 rounded-full object-cover border border-zinc-200 dark:border-zinc-700"
-                  />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs">
-                    {userInitials}
-                  </div>
-                )}
-              </button>
-            </nav>
-          </>
-        )}
-
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 }
