@@ -201,7 +201,7 @@ export default function App() {
       const generatedProfile: MentoriniUser = {
         id: userId,
         email: email || '',
-        name: metadata?.full_name || metadata?.name || email?.split('@')[0] || 'Peer Creator',
+        name: metadata?.full_name || metadata?.name || email?.split('@')[0] || 'Peer User',
         avatar_url: metadata?.avatar_url || metadata?.picture || '',
         status: 'Peer Member IT',
         role: 'member',
@@ -218,7 +218,7 @@ export default function App() {
       const fallbackProfile: MentoriniUser = {
         id: userId,
         email: email || '',
-        name: metadata?.full_name || 'Peer Creator',
+        name: metadata?.full_name || 'Peer User',
         avatar_url: metadata?.avatar_url || metadata?.picture || '',
         status: 'Peer Member IT',
         role: 'member',
@@ -396,11 +396,10 @@ export default function App() {
     }
   };
 
-  const userAvatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profileState?.avatar_url;
-  const userInitials = (profileState?.name || user?.user_metadata?.full_name || user?.email || 'U')
-    .trim()
-    .charAt(0)
-    .toUpperCase();
+  const userDisplayName = user?.user_metadata?.full_name || 'Peer User';
+  const userDisplayEmail = user?.email;
+  const userAvatarUrl = user?.user_metadata?.avatar_url;
+  const userFirstInitial = user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A';
 
   if (user || window.location.pathname === '/feed' || window.location.hash.includes('access_token')) {
     return (
@@ -432,7 +431,7 @@ export default function App() {
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                  {userInitials}
+                  {userFirstInitial}
                 </div>
               )}
             </div>
@@ -641,15 +640,15 @@ export default function App() {
                         />
                       ) : (
                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-lg shadow-md">
-                          {userInitials}
+                          {userFirstInitial}
                         </div>
                       )}
                       <div className="min-w-0">
                         <h2 className="text-sm font-black text-zinc-900 dark:text-white truncate">
-                          {profileState?.name || user?.user_metadata?.full_name || 'Peer Creator'}
+                          {userDisplayName}
                         </h2>
                         <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">
-                          {user?.email || 'compte@google.com'}
+                          {userDisplayEmail}
                         </p>
                         <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="w-3 h-3" /> Compte Google Vérifié
@@ -835,7 +834,6 @@ export default function App() {
             style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
             className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800/80 px-8 pt-3 flex justify-between items-center z-40 md:rounded-b-[28px]"
           >
-            {/* 1. Explore Compass Icon */}
             <button
               onClick={() => navigate('feed')}
               id="nav-explore-feed"
@@ -849,7 +847,6 @@ export default function App() {
               <Compass className="w-5 h-5" />
             </button>
 
-            {/* 2. [+] Upload Icon */}
             <button
               onClick={handleOpenCreatorModal}
               id="nav-creator-upload"
@@ -859,7 +856,6 @@ export default function App() {
               <Plus className="w-5 h-5 stroke-[2.5]" />
             </button>
 
-            {/* 3. High-Resolution Google Avatar Picture */}
             <button
               onClick={() => navigate('profile')}
               id="nav-profile-avatar"
@@ -879,7 +875,7 @@ export default function App() {
                 />
               ) : (
                 <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs">
-                  {userInitials}
+                  {userFirstInitial}
                 </div>
               )}
             </button>
