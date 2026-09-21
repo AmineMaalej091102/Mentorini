@@ -528,20 +528,13 @@ export default function App() {
                   />
                 </div>
 
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-3.5 py-2 rounded-xl border border-zinc-700 text-zinc-300 font-bold hover:bg-zinc-800 cursor-pointer"
-                  >
-                    Annuler
-                  </button>
+                <div className="pt-2">
                   <button
                     type="submit"
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow disabled:opacity-50 cursor-pointer"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                   >
-                    {isSaving ? 'Syncing...' : 'Enregistrer'}
+                    {isSaving ? 'Syncing...' : 'enregistrer'}
                   </button>
                 </div>
               </form>
