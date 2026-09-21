@@ -112,7 +112,7 @@ function openWhatsAppChat(phone?: string | null, mentorName?: string, topic?: st
 }
 
 function renderBioWithChips(text?: string) {
-  if (!text) return <span className="text-zinc-400 italic">Ma famech bio maktouba l-tawa.</span>;
+  if (!text) return null;
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
   return (
     <span>
@@ -401,6 +401,7 @@ export default function App() {
   const userFirstInitial = user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A';
   const activeVideoUrl = profileState?.video_url || profileState?.youtube_url;
   const activeVideoId = extractYouTubeId(activeVideoUrl);
+  const activeBio = profileState?.bio?.trim();
 
   if (user || window.location.pathname === '/feed' || window.location.hash.includes('access_token')) {
     return (
@@ -620,8 +621,8 @@ export default function App() {
               </section>
             ) : (
               <section className="space-y-4">
-                <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-5 shadow-sm space-y-5">
-                  <div className="flex flex-col items-center text-center space-y-2 relative pt-2">
+                <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl p-6 shadow-sm space-y-6">
+                  <div className="flex flex-col items-center text-center space-y-2 relative">
                     <button
                       onClick={handleSignOut}
                       className="absolute right-0 top-0 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer flex items-center gap-1"
@@ -634,35 +635,21 @@ export default function App() {
                       {userFirstInitial}
                     </div>
 
-                    <div className="space-y-0.5">
+                    <div className="space-y-1">
                       <h2 className="text-base font-black text-zinc-900 dark:text-white">
                         {userDisplayName}
                       </h2>
                       <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                         {userDisplayEmail}
                       </p>
-                      <div className="pt-1">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 text-[11px] font-bold border border-indigo-100 dark:border-indigo-900">
-                          ✨ Peer Member
-                        </span>
-                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-1">
-                    <div className="flex items-center justify-between">
+                  {activeVideoId && (
+                    <div className="space-y-2 pt-2">
                       <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                         Video 16:9 Mte3ek
                       </h3>
-                      <button
-                        onClick={handleOpenCreatorModal}
-                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                      >
-                        Baddel ✎
-                      </button>
-                    </div>
-
-                    {activeVideoId ? (
                       <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-700 shadow-inner">
                         <iframe
                           src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(
@@ -673,86 +660,19 @@ export default function App() {
                           allowFullScreen
                         />
                       </div>
-                    ) : (
-                      <div className="p-6 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-dashed border-zinc-300 dark:border-zinc-700 text-center space-y-2">
-                        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 leading-relaxed">
-                          Mazel ma 3andekch videos houni. Anzel 3la el button [+] fil navigation bar bech tcharrek el knowledge mte3ek tawa!
-                        </p>
-                        <button
-                          onClick={handleOpenCreatorModal}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow transition-all cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                          <span>Zid video tawa</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
-                  <div className="space-y-2 pt-1">
-                    <div className="flex items-center justify-between">
+                  {activeBio && (
+                    <div className="space-y-2 pt-2">
                       <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                         Bio & Liens mte3ek
                       </h3>
-                      <button
-                        onClick={handleOpenCreatorModal}
-                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                      >
-                        Baddel ✎
-                      </button>
-                    </div>
-                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                      {profileState?.bio ? (
-                        renderBioWithChips(profileState.bio)
-                      ) : (
-                        <span className="italic text-zinc-400">Faragh. Enzel 3la [+] bech t3ammer el bio mte3ek.</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4 space-y-3">
-                    <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Tbadil el Bio w Video YouTube</span>
-                    </h3>
-
-                    <form onSubmit={handleCreatorSubmit} className="space-y-3 text-xs">
-                      <div>
-                        <label className="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
-                          Bio & Liens (Drive / GitHub / Notion)
-                        </label>
-                        <textarea
-                          rows={3}
-                          required
-                          value={bioInput}
-                          onChange={(e) => setBioInput(e.target.value)}
-                          placeholder="Chnowa tnajjem t3awen w les liens mte3ek..."
-                          className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
+                      <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        {renderBioWithChips(profileState?.bio)}
                       </div>
-
-                      <div>
-                        <label className="block font-bold text-zinc-800 dark:text-zinc-200 mb-1">
-                          Lien YouTube 16:9 (Horizontal)
-                        </label>
-                        <input
-                          type="url"
-                          value={videoUrlInput}
-                          onChange={(e) => setVideoUrlInput(e.target.value)}
-                          placeholder="https://www.youtube.com/watch?v=..."
-                          className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={isSavingProfile}
-                        className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {isSavingProfile ? 'Enregistrement fil base...' : 'Sauvegarder mon profil'}
-                      </button>
-                    </form>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </section>
             )}
