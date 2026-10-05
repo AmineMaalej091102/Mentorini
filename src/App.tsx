@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient, User } from '@supabase/supabase-js';
-import { Home, Plus, Play, ExternalLink, MessageCircle, X, LogOut, CheckCircle2, Zap } from 'lucide-react';
+import { Home, PlusSquare, Play, ExternalLink, MessageCircle, X, LogOut, CheckCircle2, Zap } from 'lucide-react';
 
 const SUPABASE_URL = 'https://quweyaxneqyyjfhhccbd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
@@ -114,8 +114,8 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<MentoriniUser | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [bioInputText, setBioInputText] = useState('');
-  const [videoUrlText, setVideoUrlText] = useState('');
+  const [bioInput, setBioInput] = useState('');
+  const [videoInput, setVideoInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const fetchMentors = async () => {
@@ -148,13 +148,19 @@ export default function App() {
     }
   };
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string, email?: string) => {
     try {
-      const { data } = await supabase.from('users').select('*').eq('id', userId).single();
+      let query = supabase.from('users').select('*');
+      if (userId) {
+        query = query.eq('id', userId);
+      } else if (email) {
+        query = query.eq('email', email);
+      }
+      const { data } = await query.maybeSingle();
       if (data) {
         setUserProfile(data);
-        setBioInputText(data.bio || '');
-        setVideoUrlText(data.video_url || data.youtube_url || '');
+        setBioInput(data.bio || '');
+        setVideoInput(data.video_url || data.youtube_url || '');
       }
     } catch (err) {
       console.error(err);
@@ -170,40 +176,37 @@ export default function App() {
     }
     metaThemeColor.setAttribute('content', '#090D1A');
 
-    const handleAuthInit = async () => {
-      if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
-        const { data } = await supabase.auth.getSession();
-        if (data?.session?.user) {
-          setUser(data.session.user);
-          fetchUserProfile(data.session.user.id);
-          window.history.replaceState({}, document.title, '/feed');
-        }
-      }
-
-      const { data: initialSessionData } = await supabase.auth.getSession();
-      if (initialSessionData?.session?.user) {
-        setUser(initialSessionData.session.user);
-        fetchUserProfile(initialSessionData.session.user.id);
-      }
-
-      fetchMentors();
-    };
-
-    handleAuthInit();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         setUser(session.user);
-        fetchUserProfile(session.user.id);
+        fetchUserProfile(session.user.id, session.user.email);
         fetchMentors();
         if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
           window.history.replaceState({}, document.title, '/feed');
         }
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setUserProfile(null);
+        setBioInput('');
+        setVideoInput('');
+        setActiveTab('feed');
+        window.history.replaceState({}, document.title, '/login');
+      } else if (session?.user) {
+        setUser(session.user);
+        fetchUserProfile(session.user.id, session.user.email);
       }
     });
+
+    const checkInitialSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.user) {
+        setUser(data.session.user);
+        fetchUserProfile(data.session.user.id, data.session.user.email);
+      }
+      fetchMentors();
+    };
+
+    checkInitialSession();
 
     return () => {
       authListener?.subscription?.unsubscribe();
@@ -227,8 +230,10 @@ export default function App() {
     await supabase.auth.signOut();
     setUser(null);
     setUserProfile(null);
+    setBioInput('');
+    setVideoInput('');
     setActiveTab('feed');
-    window.history.replaceState({}, document.title, '/');
+    window.history.replaceState({}, document.title, '/login');
   };
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -237,17 +242,17 @@ export default function App() {
     setIsSaving(true);
     try {
       await supabase.from('users').update({
-        bio: bioInputText,
-        video_url: videoUrlText,
+        bio: bioInput,
+        video_url: videoInput,
         status: 'Student',
         role: 'mentor',
       }).eq('id', user.id);
 
-      await fetchUserProfile(user.id);
+      await fetchUserProfile(user.id, user.email);
       await fetchMentors();
 
-      setBioInputText('');
-      setVideoUrlText('');
+      setBioInput('');
+      setVideoInput('');
       setIsModalOpen(false);
       setActiveTab('feed');
     } catch (err) {
@@ -343,8 +348,8 @@ export default function App() {
     );
   }
 
-  const userDisplayName = user?.user_metadata?.full_name || 'Peer Member';
-  const userFirstInitial = user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A';
+  const userInitial = user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'P';
+  const userFullName = user?.user_metadata?.full_name || 'Peer Member';
   const userEmail = user?.email || '';
   const userVideoId = extractYouTubeId(userProfile?.video_url);
 
@@ -373,7 +378,7 @@ export default function App() {
               onClick={() => setActiveTab('profile')}
               className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs cursor-pointer shadow-sm"
             >
-              {user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A'}
+              {userInitial}
             </div>
           </div>
         </header>
@@ -455,12 +460,12 @@ export default function App() {
           ) : (
             <div className="p-8 flex flex-col items-center text-center space-y-4">
               <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-4xl shadow-xl border-4 border-zinc-800">
-                {user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A'}
+                {userInitial}
               </div>
 
               <div className="space-y-1">
                 <h2 className="text-xl font-black text-white">
-                  {user?.user_metadata?.full_name || userDisplayName}
+                  {userFullName}
                 </h2>
                 <p className="text-sm font-semibold text-zinc-400">
                   {userEmail}
@@ -507,8 +512,8 @@ export default function App() {
                   </label>
                   <textarea
                     rows={3}
-                    value={bioInputText}
-                    onChange={(e) => setBioInputText(e.target.value)}
+                    value={bioInput}
+                    onChange={(e) => setBioInput(e.target.value)}
                     placeholder="Chnowa tnajjem t3awen w les liens mte3ek..."
                     className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
@@ -520,8 +525,8 @@ export default function App() {
                   </label>
                   <input
                     type="text"
-                    value={videoUrlText}
-                    onChange={(e) => setVideoUrlText(e.target.value)}
+                    value={videoInput}
+                    onChange={(e) => setVideoInput(e.target.value)}
                     placeholder="https://www.youtube.com/watch?v=..."
                     className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
@@ -541,10 +546,7 @@ export default function App() {
           </div>
         )}
 
-        <nav
-          style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
-          className="absolute bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-800/80 px-8 pt-3 flex justify-between items-center z-40 md:rounded-b-[28px]"
-        >
+        <nav className="absolute bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-800/80 px-8 pt-3 pb-[calc(16px+env(safe-area-inset-bottom))] flex justify-between items-center z-40 md:rounded-b-[28px]">
           <button
             onClick={() => setActiveTab('feed')}
             aria-label="Home Feed"
@@ -560,9 +562,9 @@ export default function App() {
           <button
             onClick={() => setIsModalOpen(true)}
             aria-label="Add Content"
-            className="w-11 h-11 -mt-4 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-zinc-900"
+            className="w-11 h-11 -mt-4 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-zinc-900"
           >
-            <Plus className="w-5 h-5 stroke-[2.5]" />
+            <PlusSquare className="w-5 h-5 stroke-[2.2]" />
           </button>
 
           <button
@@ -575,7 +577,7 @@ export default function App() {
             }`}
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
-              {user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A'}
+              {userInitial}
             </div>
           </button>
         </nav>
