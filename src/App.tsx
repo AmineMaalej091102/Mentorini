@@ -114,8 +114,8 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<MentoriniUser | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [bioInput, setBioInput] = useState('');
-  const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [bioInputText, setBioInputText] = useState('');
+  const [videoUrlText, setVideoUrlText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const fetchMentors = async () => {
@@ -153,8 +153,8 @@ export default function App() {
       const { data } = await supabase.from('users').select('*').eq('id', userId).single();
       if (data) {
         setUserProfile(data);
-        setBioInput(data.bio || '');
-        setVideoUrlInput(data.video_url || data.youtube_url || '');
+        setBioInputText(data.bio || '');
+        setVideoUrlText(data.video_url || data.youtube_url || '');
       }
     } catch (err) {
       console.error(err);
@@ -191,7 +191,7 @@ export default function App() {
 
     handleAuthInit();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user);
         fetchUserProfile(session.user.id);
@@ -231,14 +231,14 @@ export default function App() {
     window.history.replaceState({}, document.title, '/');
   };
 
-  const handleSaveContent = async (e: React.FormEvent) => {
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setIsSaving(true);
     try {
       await supabase.from('users').update({
-        bio: bioInput,
-        video_url: videoUrlInput,
+        bio: bioInputText,
+        video_url: videoUrlText,
         status: 'Student',
         role: 'mentor',
       }).eq('id', user.id);
@@ -246,8 +246,8 @@ export default function App() {
       await fetchUserProfile(user.id);
       await fetchMentors();
 
-      setBioInput('');
-      setVideoUrlInput('');
+      setBioInputText('');
+      setVideoUrlText('');
       setIsModalOpen(false);
       setActiveTab('feed');
     } catch (err) {
@@ -501,15 +501,15 @@ export default function App() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveContent} className="space-y-3 text-xs">
+              <form onSubmit={handleUpload} className="space-y-3 text-xs">
                 <div>
                   <label className="block font-bold text-zinc-200 mb-1">
                     Bio & Liens (GitHub, Drive, Notion)
                   </label>
                   <textarea
                     rows={3}
-                    value={bioInput}
-                    onChange={(e) => setBioInput(e.target.value)}
+                    value={bioInputText}
+                    onChange={(e) => setBioInputText(e.target.value)}
                     placeholder="Chnowa tnajjem t3awen w les liens mte3ek..."
                     className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
@@ -521,8 +521,8 @@ export default function App() {
                   </label>
                   <input
                     type="text"
-                    value={videoUrlInput}
-                    onChange={(e) => setVideoUrlInput(e.target.value)}
+                    value={videoUrlText}
+                    onChange={(e) => setVideoUrlText(e.target.value)}
                     placeholder="https://www.youtube.com/watch?v=..."
                     className="w-full px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
