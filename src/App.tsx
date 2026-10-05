@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
 import { Home, Plus, Play, ExternalLink, MessageCircle, X, LogOut, CheckCircle2, Zap } from 'lucide-react';
 
 const SUPABASE_URL = 'https://quweyaxneqyyjfhhccbd.supabase.co';
@@ -107,7 +107,7 @@ function renderBioWithChips(text?: string) {
 }
 
 export default function App() {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
   const [mentors, setMentors] = useState<MentoriniUser[]>(SEED_MENTORS);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
@@ -173,7 +173,7 @@ export default function App() {
     const handleAuthInit = async () => {
       if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
         const { data } = await supabase.auth.getSession();
-        if (data?.session) {
+        if (data?.session?.user) {
           setUser(data.session.user);
           fetchUserProfile(data.session.user.id);
           window.history.replaceState({}, document.title, '/feed');
@@ -233,7 +233,7 @@ export default function App() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !user.id) return;
     setIsSaving(true);
     try {
       await supabase.from('users').update({
@@ -343,10 +343,9 @@ export default function App() {
     );
   }
 
-  const userFirstInitial = (user?.user_metadata?.full_name || 'A').trim().charAt(0).toUpperCase() || 'A';
-  const userFullName = user?.user_metadata?.full_name || 'Peer Member';
+  const userDisplayName = user?.user_metadata?.full_name || 'Peer Member';
+  const userFirstInitial = user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A';
   const userEmail = user?.email || '';
-
   const userVideoId = extractYouTubeId(userProfile?.video_url);
 
   return (
@@ -374,7 +373,7 @@ export default function App() {
               onClick={() => setActiveTab('profile')}
               className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs cursor-pointer shadow-sm"
             >
-              {userFirstInitial}
+              {user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A'}
             </div>
           </div>
         </header>
@@ -456,12 +455,12 @@ export default function App() {
           ) : (
             <div className="p-8 flex flex-col items-center text-center space-y-4">
               <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-4xl shadow-xl border-4 border-zinc-800">
-                {userFirstInitial}
+                {user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A'}
               </div>
 
               <div className="space-y-1">
                 <h2 className="text-xl font-black text-white">
-                  {userFullName}
+                  {user?.user_metadata?.full_name || userDisplayName}
                 </h2>
                 <p className="text-sm font-semibold text-zinc-400">
                   {userEmail}
@@ -576,7 +575,7 @@ export default function App() {
             }`}
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
-              {userFirstInitial}
+              {user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A'}
             </div>
           </button>
         </nav>
