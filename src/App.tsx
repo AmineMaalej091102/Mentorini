@@ -108,7 +108,7 @@ function renderBioWithChips(text?: string) {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<MentoriniUser | null>(null);
+  const [profileState, setProfileState] = useState<MentoriniUser | null>(null);
   const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
   const [mentors, setMentors] = useState<MentoriniUser[]>(SEED_MENTORS);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
@@ -148,40 +148,43 @@ export default function App() {
     }
   };
 
-  const loadProfileData = async (sessionUser: User) => {
-    setUser(sessionUser);
+  const syncPublicUserTable = async (authUser: User) => {
     try {
       const { data } = await supabase
         .from('users')
         .select('*')
-        .eq('id', sessionUser.id)
+        .eq('id', authUser.id)
         .single();
 
       if (data) {
-        setProfile(data);
+        setProfileState(data);
         setBioInput(data.bio || '');
         setVideoInput(data.video_url || data.youtube_url || '');
       } else {
         const fallbackProfile: MentoriniUser = {
-          id: sessionUser.id,
-          name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Peer Member',
-          email: sessionUser.email || '',
+          id: authUser.id,
+          name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Peer Member',
+          email: authUser.email || '',
+          phone: authUser.user_metadata?.phone || '',
+          status: 'Student',
           bio: '',
           video_url: '',
-          status: 'Student',
+          category: 'IT_PEER',
         };
-        setProfile(fallbackProfile);
+        setProfileState(fallbackProfile);
       }
     } catch {
       const fallbackProfile: MentoriniUser = {
-        id: sessionUser.id,
-        name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Peer Member',
-        email: sessionUser.email || '',
+        id: authUser.id,
+        name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Peer Member',
+        email: authUser.email || '',
+        phone: authUser.user_metadata?.phone || '',
+        status: 'Student',
         bio: '',
         video_url: '',
-        status: 'Student',
+        category: 'IT_PEER',
       };
-      setProfile(fallbackProfile);
+      setProfileState(fallbackProfile);
     }
   };
 
@@ -194,31 +197,42 @@ export default function App() {
     }
     metaThemeColor.setAttribute('content', '#090D1A');
 
+    const handleRootAuth = async () => {
+      if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          setUser(data.session.user);
+          window.history.replaceState({}, document.title, '/feed');
+          await syncPublicUserTable(data.session.user);
+          fetchMentors();
+          return;
+        }
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.user) {
+        setUser(data.session.user);
+        await syncPublicUserTable(data.session.user);
+      }
+      fetchMentors();
+    };
+
+    handleRootAuth();
+
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
-        await loadProfileData(session.user);
+      if (session?.user) {
+        setUser(session.user);
+        await syncPublicUserTable(session.user);
         fetchMentors();
         if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
           window.history.replaceState({}, document.title, '/feed');
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
-        setProfile(null);
+        setProfileState(null);
         window.location.replace('/');
-      } else if (session?.user) {
-        await loadProfileData(session.user);
       }
     });
-
-    const initAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session?.user) {
-        await loadProfileData(data.session.user);
-      }
-      fetchMentors();
-    };
-
-    initAuth();
 
     return () => {
       authListener?.subscription?.unsubscribe();
@@ -241,7 +255,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setProfile(null);
+    setProfileState(null);
     window.location.replace('/');
   };
 
@@ -257,18 +271,7 @@ export default function App() {
         role: 'mentor',
       }).eq('id', user.id);
 
-      const { data: updatedProfile } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (updatedProfile) {
-        setProfile(updatedProfile);
-      } else {
-        setProfile((prev) => (prev ? { ...prev, bio: bioInput, video_url: videoInput } : null));
-      }
-
+      await syncPublicUserTable(user);
       await fetchMentors();
 
       setBioInput('');
@@ -282,7 +285,9 @@ export default function App() {
     }
   };
 
-  if (!user || !profile) {
+  const hasTokenInUrl = typeof window !== 'undefined' && (window.location.hash.includes('access_token') || window.location.search.includes('code'));
+
+  if (!user && !hasTokenInUrl) {
     return (
       <div className="flex justify-center items-center min-h-screen antialiased text-zinc-100 bg-[#090D1A] font-sans">
         <div className="relative w-full max-w-[480px] h-screen max-h-[920px] bg-zinc-900 shadow-2xl overflow-hidden flex flex-col justify-between p-6 md:rounded-[32px] md:border border-zinc-800">
@@ -366,16 +371,18 @@ export default function App() {
     );
   }
 
-  const initials = profile?.name
-    ? profile.name
+  const initialLetter = profileState?.name
+    ? profileState.name
         .split(' ')
         .filter(Boolean)
         .map((n: string) => n.charAt(0))
         .join('')
-        .toUpperCase()
-    : 'PM';
+        .toUpperCase() || 'A'
+    : (user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'A');
 
-  const userVideoId = extractYouTubeId(profile?.video_url);
+  const displayName = profileState?.name || user?.user_metadata?.full_name || 'Peer Member';
+  const displayEmail = profileState?.email || user?.email || '';
+  const userVideoId = extractYouTubeId(profileState?.video_url);
 
   return (
     <div className="flex justify-center items-center min-h-screen antialiased text-zinc-100 bg-[#090D1A] font-sans">
@@ -402,7 +409,7 @@ export default function App() {
               onClick={() => setActiveTab('profile')}
               className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs cursor-pointer shadow-sm tracking-tighter"
             >
-              {initials}
+              {initialLetter}
             </div>
           </div>
         </header>
@@ -484,15 +491,15 @@ export default function App() {
           ) : (
             <div className="p-8 flex flex-col items-center text-center space-y-4">
               <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-3xl shadow-xl border-4 border-zinc-800 tracking-tight">
-                {initials}
+                {initialLetter}
               </div>
 
               <div className="space-y-1">
                 <h2 className="text-xl font-black text-white">
-                  {profile?.name}
+                  {displayName}
                 </h2>
                 <p className="text-sm font-semibold text-zinc-400">
-                  {profile?.email || user?.email}
+                  {displayEmail}
                 </p>
               </div>
 
@@ -601,7 +608,7 @@ export default function App() {
             }`}
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs shadow-sm tracking-tighter">
-              {initials}
+              {initialLetter}
             </div>
           </button>
         </nav>
