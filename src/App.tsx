@@ -111,7 +111,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
   const [mentors, setMentors] = useState<MentoriniUser[]>(SEED_MENTORS);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<MentoriniUser | null>(null);
+  const [profileState, setProfileState] = useState<MentoriniUser | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [bioInput, setBioInput] = useState('');
@@ -131,7 +131,7 @@ export default function App() {
         setMentors(
           data.map((u: any) => ({
             id: String(u.id || u.email || Math.random()),
-            name: u.name || u.user_metadata?.full_name || 'Peer Mentor',
+            name: u.name || u.user_metadata?.full_name || 'Member',
             email: u.email || '',
             phone: u.phone || u.whatsapp_number || '',
             status: u.status || 'Student',
@@ -150,17 +150,27 @@ export default function App() {
 
   const fetchUserProfile = async (userId: string, email?: string) => {
     try {
-      let query = supabase.from('users').select('*');
-      if (userId) {
-        query = query.eq('id', userId);
+      const { data: existingProfile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (existingProfile && !error) {
+        setProfileState(existingProfile);
+        setBioInput(existingProfile.bio || '');
+        setVideoInput(existingProfile.video_url || existingProfile.youtube_url || '');
       } else if (email) {
-        query = query.eq('email', email);
-      }
-      const { data } = await query.maybeSingle();
-      if (data) {
-        setUserProfile(data);
-        setBioInput(data.bio || '');
-        setVideoInput(data.video_url || data.youtube_url || '');
+        const { data: emailProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .single();
+        if (emailProfile) {
+          setProfileState(emailProfile);
+          setBioInput(emailProfile.bio || '');
+          setVideoInput(emailProfile.video_url || emailProfile.youtube_url || '');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -179,21 +189,52 @@ export default function App() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         setUser(session.user);
-        fetchUserProfile(session.user.id, session.user.email);
+        const { data: existingProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (existingProfile) {
+          setProfileState(existingProfile);
+          setBioInput(existingProfile.bio || '');
+          setVideoInput(existingProfile.video_url || existingProfile.youtube_url || '');
+        } else if (session.user.email) {
+          const { data: emailProfile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', session.user.email)
+            .single();
+          if (emailProfile) {
+            setProfileState(emailProfile);
+            setBioInput(emailProfile.bio || '');
+            setVideoInput(emailProfile.video_url || emailProfile.youtube_url || '');
+          }
+        }
+
         fetchMentors();
         if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
           window.history.replaceState({}, document.title, '/feed');
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
-        setUserProfile(null);
+        setProfileState(null);
         setBioInput('');
         setVideoInput('');
         setActiveTab('feed');
         window.history.replaceState({}, document.title, '/login');
       } else if (session?.user) {
         setUser(session.user);
-        fetchUserProfile(session.user.id, session.user.email);
+        const { data: existingProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        if (existingProfile) {
+          setProfileState(existingProfile);
+          setBioInput(existingProfile.bio || '');
+          setVideoInput(existingProfile.video_url || existingProfile.youtube_url || '');
+        }
       }
     });
 
@@ -201,7 +242,7 @@ export default function App() {
       const { data } = await supabase.auth.getSession();
       if (data?.session?.user) {
         setUser(data.session.user);
-        fetchUserProfile(data.session.user.id, data.session.user.email);
+        await fetchUserProfile(data.session.user.id, data.session.user.email);
       }
       fetchMentors();
     };
@@ -229,7 +270,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setUserProfile(null);
+    setProfileState(null);
     setBioInput('');
     setVideoInput('');
     setActiveTab('feed');
@@ -248,7 +289,15 @@ export default function App() {
         role: 'mentor',
       }).eq('id', user.id);
 
-      await fetchUserProfile(user.id, user.email);
+      const { data: updatedProfile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (updatedProfile) {
+        setProfileState(updatedProfile);
+      }
+
       await fetchMentors();
 
       setBioInput('');
@@ -348,10 +397,16 @@ export default function App() {
     );
   }
 
-  const userInitial = user?.user_metadata?.full_name?.charAt(0).toUpperCase() || 'P';
-  const userFullName = user?.user_metadata?.full_name || 'Peer Member';
-  const userEmail = user?.email || '';
-  const userVideoId = extractYouTubeId(userProfile?.video_url);
+  const userInitials = profileState?.name
+    ? profileState.name
+        .split(' ')
+        .filter(Boolean)
+        .map((n) => n.charAt(0))
+        .join('')
+        .toUpperCase()
+    : 'PM';
+
+  const userVideoId = extractYouTubeId(profileState?.video_url);
 
   return (
     <div className="flex justify-center items-center min-h-screen antialiased text-zinc-100 bg-[#090D1A] font-sans">
@@ -376,9 +431,9 @@ export default function App() {
             </button>
             <div
               onClick={() => setActiveTab('profile')}
-              className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs cursor-pointer shadow-sm"
+              className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs cursor-pointer shadow-sm tracking-tighter"
             >
-              {userInitial}
+              {userInitials}
             </div>
           </div>
         </header>
@@ -459,16 +514,16 @@ export default function App() {
             </div>
           ) : (
             <div className="p-8 flex flex-col items-center text-center space-y-4">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-4xl shadow-xl border-4 border-zinc-800">
-                {userInitial}
+              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-3xl shadow-xl border-4 border-zinc-800 tracking-tight">
+                {userInitials}
               </div>
 
               <div className="space-y-1">
                 <h2 className="text-xl font-black text-white">
-                  {userFullName}
+                  {profileState?.name || 'Loading...'}
                 </h2>
                 <p className="text-sm font-semibold text-zinc-400">
-                  {userEmail}
+                  {profileState?.email || user?.email}
                 </p>
               </div>
 
@@ -576,8 +631,8 @@ export default function App() {
                 : 'opacity-75 hover:opacity-100'
             }`}
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
-              {userInitial}
+            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-[11px] shadow-sm tracking-tighter">
+              {userInitials}
             </div>
           </button>
         </nav>
