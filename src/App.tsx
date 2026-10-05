@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User } from '@supabase/supabase-js';
-import { Home, PlusSquare, Play, ExternalLink, MessageCircle, X, LogOut } from 'lucide-react';
+import { Session } from '@supabase/supabase-js';
+import { Home, Plus, Play, ExternalLink, MessageCircle, X, LogOut } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import LoginView from './LoginView';
 
@@ -99,16 +99,8 @@ function renderBioWithChips(text?: string) {
   );
 }
 
-function parseNameInitials(name?: string | null): string {
-  if (!name) return 'PM';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'PM';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
-}
-
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<MentoriniUser | null>(null);
   const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
   const [mentors, setMentors] = useState<MentoriniUser[]>(SEED_MENTORS);
@@ -149,25 +141,25 @@ export default function App() {
     }
   };
 
-  const syncProfile = async (sessionUser: User) => {
-    setUser(sessionUser);
+  const fetchUserDataRow = async (userId: string, authUser?: any) => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', sessionUser.id)
+        .eq('id', userId)
         .single();
 
-      if (data) {
+      if (data && !error) {
         setProfile(data);
         setBioInput(data.bio || '');
         setVideoInput(data.video_url || data.youtube_url || '');
       } else {
+        const activeUser = authUser || session?.user;
         const fallback: MentoriniUser = {
-          id: sessionUser.id,
-          name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Member',
-          email: sessionUser.email || '',
-          phone: sessionUser.user_metadata?.phone || '',
+          id: userId,
+          name: activeUser?.user_metadata?.full_name || activeUser?.email?.split('@')[0] || 'Peer Member',
+          email: activeUser?.email || '',
+          phone: activeUser?.user_metadata?.phone || '',
           status: 'Student',
           bio: '',
           video_url: '',
@@ -176,11 +168,12 @@ export default function App() {
         setProfile(fallback);
       }
     } catch {
+      const activeUser = authUser || session?.user;
       const fallback: MentoriniUser = {
-        id: sessionUser.id,
-        name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Member',
-        email: sessionUser.email || '',
-        phone: sessionUser.user_metadata?.phone || '',
+        id: userId,
+        name: activeUser?.user_metadata?.full_name || activeUser?.email?.split('@')[0] || 'Peer Member',
+        email: activeUser?.email || '',
+        phone: activeUser?.user_metadata?.phone || '',
         status: 'Student',
         bio: '',
         video_url: '',
@@ -199,36 +192,35 @@ export default function App() {
     }
     metaThemeColor.setAttribute('content', '#090D1A');
 
-    const initializeSession = async () => {
-      if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
+    const initializeAuth = async () => {
+      if (window.location.hash.includes('access_token') || window.location.hash.includes('id_token')) {
         const { data } = await supabase.auth.getSession();
         if (data?.session) {
-          setUser(data.session.user);
+          setSession(data.session);
           window.history.replaceState({}, document.title, '/feed');
-          await syncProfile(data.session.user);
+          await fetchUserDataRow(data.session.user.id, data.session.user);
           fetchMentors();
           return;
         }
       }
 
       const { data } = await supabase.auth.getSession();
-      if (data?.session?.user) {
-        await syncProfile(data.session.user);
+      if (data?.session) {
+        setSession(data.session);
+        await fetchUserDataRow(data.session.user.id, data.session.user);
       }
       fetchMentors();
     };
 
-    initializeSession();
+    initializeAuth();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await syncProfile(session.user);
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      if (currentSession) {
+        setSession(currentSession);
+        await fetchUserDataRow(currentSession.user.id, currentSession.user);
         fetchMentors();
-        if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
-          window.history.replaceState({}, document.title, '/feed');
-        }
       } else if (event === 'SIGNED_OUT') {
-        setUser(null);
+        setSession(null);
         setProfile(null);
         window.location.replace('/');
       }
@@ -241,14 +233,14 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
+    setSession(null);
     setProfile(null);
     window.location.replace('/');
   };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !user.id) return;
+    if (!session?.user?.id) return;
     setIsSaving(true);
     try {
       await supabase.from('users').update({
@@ -256,9 +248,9 @@ export default function App() {
         video_url: videoInput,
         status: 'Student',
         role: 'mentor',
-      }).eq('id', user.id);
+      }).eq('id', session.user.id);
 
-      await syncProfile(user);
+      await fetchUserDataRow(session.user.id, session.user);
       await fetchMentors();
 
       setBioInput('');
@@ -272,13 +264,13 @@ export default function App() {
     }
   };
 
-  if (!user) {
+  if (!session) {
     return <LoginView />;
   }
 
-  const rawName = profile?.name || user?.user_metadata?.full_name || 'Peer Member';
-  const dynamicInitials = parseNameInitials(rawName);
-  const emailDisplay = profile?.email || user?.email || '';
+  const userInitials = profile?.name ? profile.name.split(' ').map(n => n.charAt(0)).join('').toUpperCase() : 'PM';
+  const rawName = profile?.name || session.user.user_metadata?.full_name || 'Peer Member';
+  const emailDisplay = profile?.email || session.user.email || '';
   const userVideoId = extractYouTubeId(profile?.video_url);
 
   return (
@@ -306,7 +298,7 @@ export default function App() {
               onClick={() => setActiveTab('profile')}
               className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs cursor-pointer shadow-sm tracking-tighter"
             >
-              {dynamicInitials}
+              {userInitials}
             </div>
           </div>
         </header>
@@ -388,7 +380,7 @@ export default function App() {
           ) : (
             <div className="p-8 flex flex-col items-center text-center space-y-4">
               <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-white flex items-center justify-center font-black text-3xl shadow-xl border-4 border-zinc-800 tracking-tight">
-                {dynamicInitials}
+                {userInitials}
               </div>
 
               <div className="space-y-1">
@@ -492,7 +484,7 @@ export default function App() {
             aria-label="Add Content"
             className="w-11 h-11 -mt-4 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-zinc-900"
           >
-            <PlusSquare className="w-5 h-5 stroke-[2.2]" />
+            <Plus className="w-5 h-5 stroke-[2.2]" />
           </button>
 
           <button
@@ -505,7 +497,7 @@ export default function App() {
             }`}
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-xs shadow-sm tracking-tighter">
-              {dynamicInitials}
+              {userInitials}
             </div>
           </button>
         </nav>
